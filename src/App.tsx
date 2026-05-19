@@ -17,11 +17,12 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { THEMES, type ThemeName } from "./themes";
+import { THEMES, rad, type ThemeName } from "./themes";
 import {
   ThemeContext,
   WorkspaceContext,
   WorkspaceInfoContext,
+  InstalledClisContext,
   type WorkspaceInfo,
 } from "./themeContext";
 import {
@@ -330,6 +331,9 @@ const WindowsControls: Component = () => (
 
 const Titlebar: Component<{
   onToggleSettings: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  onAddProject: () => void;
 }> = (props) => {
   const theme = useTheme;
   return (
@@ -351,35 +355,67 @@ const Titlebar: Component<{
         <TrafficLights />
       </Show>
       <button
+        onClick={props.onToggleSidebar}
+        title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        aria-pressed={!props.sidebarOpen}
         style={{
-          background: "transparent",
+          background: props.sidebarOpen ? "transparent" : theme().panelAlt,
           border: "none",
           padding: "4px",
-          color: theme().textDim,
+          color: props.sidebarOpen ? theme().textDim : theme().text,
           cursor: "pointer",
           display: "flex",
           "align-items": "center",
           "justify-content": "center",
-          "border-radius": "4px",
+          "border-radius": rad(theme(), 4),
+          transition: "background 90ms, color 90ms",
         }}
         onMouseEnter={(e) => (e.currentTarget.style.background = theme().panelAlt)}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        onMouseLeave={(e) =>
+          (e.currentTarget.style.background = props.sidebarOpen
+            ? "transparent"
+            : theme().panelAlt)
+        }
       >
         <Icon name="sidebar" size={15} />
       </button>
-      <Show when={isWindows}>
-        <div
-          style={{
-            "font-size": "12px",
-            color: theme().textDim,
-            "letter-spacing": "-0.01em",
-            "user-select": "none",
-            "pointer-events": "none",
-          }}
-        >
-          faye
-        </div>
-      </Show>
+      <div
+        style={{
+          width: "1px",
+          height: "16px",
+          background: theme().border,
+          "margin-left": "2px",
+          "margin-right": "2px",
+        }}
+      />
+      <button
+        onClick={props.onAddProject}
+        title="New project"
+        style={{
+          background: "transparent",
+          border: "none",
+          padding: "4px 8px",
+          color: theme().textDim,
+          cursor: "pointer",
+          display: "flex",
+          "align-items": "center",
+          gap: "6px",
+          "border-radius": rad(theme(), 6),
+          "font-size": "11px",
+          "font-family": "var(--mono)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = theme().panelAlt;
+          e.currentTarget.style.color = theme().text;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = theme().textDim;
+        }}
+      >
+        <Icon name="plus" size={11} />
+        <span>new project</span>
+      </button>
       <div style={{ flex: 1 }} />
       <button
         onClick={props.onToggleSettings}
@@ -392,7 +428,7 @@ const Titlebar: Component<{
           display: "flex",
           "align-items": "center",
           gap: "6px",
-          "border-radius": "6px",
+          "border-radius": rad(theme(), 6),
           "font-size": "11px",
           "font-family": "var(--mono)",
           "margin-right": isWindows ? "6px" : 0,
@@ -493,7 +529,7 @@ const WorkspaceItem: Component<{
         gap: "12px",
         padding: "10px 12px",
         margin: "2px 8px",
-        "border-radius": "10px",
+        "border-radius": rad(theme(), 10),
         cursor: "pointer",
         position: "relative",
         background: props.active
@@ -556,72 +592,32 @@ const Sidebar: Component<{
   workspaces: Workspace[];
   active: string;
   setActive: (id: string) => void;
-  onAdd: () => void;
   density: Density;
+  open: boolean;
 }> = (props) => {
   const theme = useTheme;
+  const fullWidth = () => (props.density === "compact" ? 220 : 248);
   return (
     <div
+      aria-hidden={!props.open}
       style={{
-        width: props.density === "compact" ? "220px" : "248px",
+        width: `${props.open ? fullWidth() : 0}px`,
         background: theme().chrome,
-        "border-right": `1px solid ${theme().border}`,
-        display: "flex",
-        "flex-direction": "column",
+        "border-right": props.open ? `1px solid ${theme().border}` : "none",
         "flex-shrink": 0,
+        overflow: "hidden",
+        transition: "width 180ms ease, border-color 180ms ease",
       }}
     >
       <div
         style={{
+          width: `${fullWidth()}px`,
+          height: "100%",
           display: "flex",
-          "align-items": "center",
-          "justify-content": "space-between",
-          padding: "14px 18px 12px",
-          gap: "10px",
+          "flex-direction": "column",
         }}
       >
-        <div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-          <FayeMascot size={22} wing={theme().accent} body={theme().bg} />
-          <span
-            style={{
-              "font-size": "15px",
-              "font-weight": 600,
-              color: theme().text,
-              "letter-spacing": "-0.02em",
-            }}
-          >
-            faye
-          </span>
-        </div>
-        <button
-          onClick={props.onAdd}
-          title="Add folder"
-          style={{
-            background: "transparent",
-            border: `1px solid ${theme().border}`,
-            width: "22px",
-            height: "22px",
-            "border-radius": "6px",
-            padding: 0,
-            color: theme().textDim,
-            cursor: "pointer",
-            display: "flex",
-            "align-items": "center",
-            "justify-content": "center",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = theme().panelAlt;
-            e.currentTarget.style.color = theme().text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = theme().textDim;
-          }}
-        >
-          <Icon name="plus" size={11} />
-        </button>
-      </div>
-      <div style={{ flex: 1, overflow: "auto", padding: "4px 0" }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "10px 0 4px" }}>
         <Show
           when={props.workspaces.length > 0}
           fallback={
@@ -636,7 +632,7 @@ const Sidebar: Component<{
             >
               No folders yet.
               <br />
-              Click <span style={{ color: theme().textDim }}>+</span> to add one.
+              Use <span style={{ color: theme().textDim }}>+ new project</span> in the toolbar.
             </div>
           }
         >
@@ -668,6 +664,7 @@ const Sidebar: Component<{
           {props.workspaces.length} folder{props.workspaces.length === 1 ? "" : "s"}
         </span>
       </div>
+      </div>
     </div>
   );
 };
@@ -677,10 +674,30 @@ const Sidebar: Component<{
 // ─────────────────────────────────────────────────────────────
 type AgentKind = "terminal" | "claude" | "codex";
 
+const CLI_REGISTRY = [
+  { kind: "claude" as const, label: "Claude Code", binary: "claude" },
+  { kind: "codex" as const, label: "Codex", binary: "codex" },
+  // { kind: "gemini" as const, label: "Gemini", binary: "gemini" },
+  // { kind: "pi" as const, label: "Pi", binary: "pi" },
+] satisfies {
+  kind: Exclude<AgentKind, "terminal">;
+  label: string;
+  binary: string;
+}[];
+
+const CLI_KINDS: ReadonlySet<AgentKind> = new Set(
+  CLI_REGISTRY.map((c) => c.kind),
+);
+
+function isPtyKind(kind: AgentKind): boolean {
+  return kind === "terminal" || CLI_KINDS.has(kind);
+}
+
 interface Tab {
   id: string;
   kind: AgentKind;
   title: string;
+  cliSessionId?: string;
 }
 
 type DropSide = "left" | "right" | "top" | "bottom" | "center";
@@ -746,7 +763,12 @@ function layoutToPaneTree(
       const s = sessions.get(id);
       if (!s) continue;
       const kind = isAgentKind(s.kind) ? s.kind : "terminal";
-      tabs.push({ id: s.id, kind, title: s.title });
+      tabs.push({
+        id: s.id,
+        kind,
+        title: s.title,
+        cliSessionId: s.cliSessionId ?? undefined,
+      });
     }
     let activeTab = node.activeTabId;
     if (!tabs.some((t) => t.id === activeTab)) activeTab = tabs[0]?.id ?? "";
@@ -793,6 +815,7 @@ async function saveProjectState(
     projectId,
     kind: t.kind,
     title: t.title,
+    cliSessionId: t.cliSessionId ?? null,
   }));
   // Sessions first so the layout never references a missing row.
   await replaceSessions(projectId, sessions);
@@ -1015,7 +1038,7 @@ const TabItem: Component<{
         gap: "8px",
         height: "30px",
         padding: "0 8px 0 10px",
-        "border-radius": "8px",
+        "border-radius": rad(theme(), 8),
         background: props.active
           ? theme().panel
           : hover()
@@ -1053,7 +1076,7 @@ const TabItem: Component<{
             "margin-left": "2px",
             width: "16px",
             height: "16px",
-            "border-radius": "4px",
+            "border-radius": rad(theme(), 4),
             display: "flex",
             "align-items": "center",
             "justify-content": "center",
@@ -1077,10 +1100,12 @@ const AddMenu: Component<{
   anchorBelow?: boolean;
 }> = (props) => {
   const theme = useTheme;
-  const items: { kind: AgentKind; label: string }[] = [
+  const installedClis = useContext(InstalledClisContext);
+  const items = (): { kind: AgentKind; label: string }[] => [
     { kind: "terminal", label: "Terminal" },
-    { kind: "claude", label: "Claude Code" },
-    { kind: "codex", label: "Codex" },
+    ...CLI_REGISTRY
+      .filter((c) => installedClis().has(c.kind))
+      .map(({ kind, label }) => ({ kind, label })),
   ];
   const below = () => props.anchorBelow ?? true;
   return (
@@ -1099,7 +1124,7 @@ const AddMenu: Component<{
           "z-index": 101,
           background: theme().panelAlt,
           border: `1px solid ${theme().borderStrong}`,
-          "border-radius": "10px",
+          "border-radius": rad(theme(), 10),
           padding: "6px",
           "box-shadow": `0 14px 40px rgba(0,0,0,0.6), 0 0 0 0.5px ${theme().borderStrong}`,
         }}
@@ -1120,7 +1145,7 @@ const AddMenu: Component<{
             "border-right": below() ? "none" : `1px solid ${theme().borderStrong}`,
           }}
         />
-        <For each={items}>
+        <For each={items()}>
           {(it) => (
             <div
               onClick={() => {
@@ -1132,7 +1157,7 @@ const AddMenu: Component<{
                 "align-items": "center",
                 gap: "10px",
                 padding: "7px 10px",
-                "border-radius": "6px",
+                "border-radius": rad(theme(), 6),
                 cursor: "pointer",
                 color: theme().text,
                 "font-size": "13px",
@@ -1195,7 +1220,7 @@ const TabBar: Component<{
             cursor: "pointer",
             width: "26px",
             height: "26px",
-            "border-radius": "6px",
+            "border-radius": rad(theme(), 6),
             "margin-top": "2px",
             display: "flex",
             "align-items": "center",
@@ -1246,7 +1271,7 @@ const Chip: Component<ChipDef> = (props) => {
         height: "24px",
         background: theme().panelAlt,
         border: `1px solid ${theme().border}`,
-        "border-radius": "7px",
+        "border-radius": rad(theme(), 7),
         "font-size": "11.5px",
         color: theme().textDim,
         "font-family": "var(--mono)",
@@ -1381,7 +1406,7 @@ const ClaudeChat: Component = () => {
           padding: "10px 14px",
           background: theme().panelDeep,
           border: `1px solid ${theme().border}`,
-          "border-radius": "8px",
+          "border-radius": rad(theme(), 8),
           "font-size": "12px",
         }}
       >
@@ -1546,7 +1571,7 @@ const SideHighlight: Component<{ side: DropSide }> = (props) => {
         ...rectFor(),
         background: `${theme().accent}26`,
         border: `2px solid ${theme().accent}`,
-        "border-radius": props.side === "center" ? "10px" : "0",
+        "border-radius": props.side === "center" ? rad(theme(), 10) : "0",
         "pointer-events": "none",
         transition: "all 80ms ease-out",
       }}
@@ -1627,6 +1652,7 @@ const LeafPaneView: Component<{
       id,
       kind,
       title: AGENT_LABEL[kind].toLowerCase().replace(" ", "-"),
+      cliSessionId: kind === "claude" ? crypto.randomUUID() : undefined,
     };
     props.setLeaf((leaf) => ({
       ...leaf,
@@ -1680,7 +1706,7 @@ const LeafPaneView: Component<{
           background: theme().panel,
         }}
       >
-        <For each={props.leaf.tabs.filter((t) => t.kind === "terminal")}>
+        <For each={props.leaf.tabs.filter((t) => isPtyKind(t.kind))}>
           {(t) => {
             const [, setHost] = terminalHost(t.id);
             return (
@@ -1701,7 +1727,7 @@ const LeafPaneView: Component<{
             );
           }}
         </For>
-        <Show when={active() && active()!.kind !== "terminal"}>
+        <Show when={active() && !isPtyKind(active()!.kind)}>
           <div style={{ position: "absolute", inset: 0, overflow: "auto" }}>
             <AgentContent kind={active()!.kind as ChatAgentKind} />
           </div>
@@ -1727,7 +1753,7 @@ const LeafPaneView: Component<{
                 padding: "10px 16px",
                 background: theme().panelAlt,
                 border: `1px solid ${theme().borderStrong}`,
-                "border-radius": "10px",
+                "border-radius": rad(theme(), 10),
                 color: theme().text,
                 cursor: "pointer",
                 "font-size": "13px",
@@ -1972,7 +1998,7 @@ const RadioRow: Component<{
               style={{
                 flex: 1,
                 padding: "6px 10px",
-                "border-radius": "6px",
+                "border-radius": rad(theme(), 6),
                 "font-size": "12px",
                 cursor: "pointer",
                 background:
@@ -2012,7 +2038,7 @@ const TweaksPanel: Component<{
           width: "280px",
           background: theme().chrome,
           border: `1px solid ${theme().borderStrong}`,
-          "border-radius": "12px",
+          "border-radius": rad(theme(), 12),
           padding: "16px",
           "box-shadow": "0 24px 60px rgba(0,0,0,0.5)",
           "z-index": 200,
@@ -2037,7 +2063,7 @@ const TweaksPanel: Component<{
               padding: "4px",
               display: "flex",
               "align-items": "center",
-              "border-radius": "4px",
+              "border-radius": rad(theme(), 4),
             }}
           >
             <Icon name="close" size={11} />
@@ -2051,6 +2077,7 @@ const TweaksPanel: Component<{
             { value: "ember", label: "Ember" },
             { value: "forest", label: "Forest" },
             { value: "plum", label: "Plum" },
+            { value: "zed", label: "Zed Light" },
           ]}
         />
         <RadioRow
@@ -2106,7 +2133,7 @@ const EmptyWorkspace: Component<{
             border: `1px solid ${theme().borderStrong}`,
             color: theme().text,
             padding: "8px 16px",
-            "border-radius": "8px",
+            "border-radius": rad(theme(), 8),
             cursor: "pointer",
             "font-size": "12px",
             "font-family": "var(--mono)",
@@ -2128,17 +2155,65 @@ const EmptyWorkspace: Component<{
 // ─────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────
+const SIDEBAR_OPEN_KEY = "faye:sidebarOpen";
+const THEME_NAME_KEY = "faye:themeName";
+
+const readSidebarOpen = (): boolean => {
+  try {
+    const v = localStorage.getItem(SIDEBAR_OPEN_KEY);
+    return v === null ? true : v === "1";
+  } catch {
+    return true;
+  }
+};
+
+const readThemeName = (): ThemeName => {
+  try {
+    const v = localStorage.getItem(THEME_NAME_KEY);
+    if (v && v in THEMES) return v as ThemeName;
+  } catch {}
+  return "ember";
+};
+
 const App: Component = () => {
-  const [themeName, setThemeName] = createSignal<ThemeName>("ember");
+  const [themeName, setThemeNameSignal] = createSignal<ThemeName>(readThemeName());
+  const setThemeName = (n: ThemeName) => {
+    setThemeNameSignal(n);
+    try {
+      localStorage.setItem(THEME_NAME_KEY, n);
+    } catch {}
+  };
   const [density, setDensity] = createSignal<Density>("cozy");
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [sidebarOpen, setSidebarOpen] = createSignal<boolean>(readSidebarOpen());
+
+  const toggleSidebar = () => {
+    setSidebarOpen((o) => {
+      const next = !o;
+      try {
+        localStorage.setItem(SIDEBAR_OPEN_KEY, next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
 
   const themeAccessor = () => THEMES[themeName()];
+
+  createEffect(() => {
+    const t = themeAccessor();
+    const root = document.documentElement.style;
+    root.setProperty("--scrollbar-radius", rad(t, 8));
+    root.setProperty("--body-bg", t.bg);
+    root.setProperty("--body-fg", t.text);
+  });
 
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
   const [activeWs, setActiveWs] = createSignal<string>("");
   const [panes, setPanes] = createSignal<PanesByWs>({});
   const [bootstrapped, setBootstrapped] = createSignal(false);
+  const [installedClis, setInstalledClis] = createSignal<Map<string, string>>(
+    new Map(),
+  );
 
   onMount(async () => {
     try {
@@ -2160,6 +2235,30 @@ const App: Component = () => {
     } finally {
       setBootstrapped(true);
     }
+  });
+
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
+
+  onMount(() => {
+    invoke<{ kind: string; found: boolean; path: string | null }[]>("detect_clis")
+      .then((infos) => {
+        const next = new Map<string, string>();
+        for (const c of infos) {
+          if (c.found && c.path) next.set(c.kind, c.path);
+        }
+        setInstalledClis(next);
+      })
+      .catch((err) => console.error("detect_clis failed", err));
   });
 
   const ensurePanes = (wsId: string) => {
@@ -2280,26 +2379,27 @@ const App: Component = () => {
   const currentPath = (): string | undefined =>
     workspaces().find((w) => w.id === activeWs())?.path;
 
-  // Terminal tabs across the active workspace's pane tree. Driven by tab
-  // identity, not pane position, so dragging tabs between leaves doesn't
-  // remount XtermPane and respawn the PTY.
-  const terminalTabsInWs = createMemo<Tab[]>(() => {
-    const c = current();
-    if (!c) return [];
+  // PTY-backed tabs (terminal + any CLI agent) across every workspace's pane
+  // tree. Mounted at the App root so switching workspaces re-parents the
+  // xterm DOM (via the terminalHost registry) instead of unmounting the
+  // XtermPane and killing the PTY.
+  const allPtyTabs = createMemo<Tab[]>(() => {
     const out: Tab[] = [];
-    walkLeaves(c.root, (leaf) => {
-      for (const t of leaf.tabs) if (t.kind === "terminal") out.push(t);
-    });
+    for (const wp of Object.values(panes())) {
+      walkLeaves(wp.root, (leaf) => {
+        for (const t of leaf.tabs) if (isPtyKind(t.kind)) out.push(t);
+      });
+    }
     return out;
   });
 
   const activeTabIds = createMemo<Set<string>>(() => {
-    const c = current();
     const s = new Set<string>();
-    if (!c) return s;
-    walkLeaves(c.root, (leaf) => {
-      if (leaf.activeTab) s.add(leaf.activeTab);
-    });
+    for (const wp of Object.values(panes())) {
+      walkLeaves(wp.root, (leaf) => {
+        if (leaf.activeTab) s.add(leaf.activeTab);
+      });
+    }
     return s;
   });
 
@@ -2423,18 +2523,24 @@ const App: Component = () => {
     <ThemeContext.Provider value={themeAccessor}>
       <WorkspaceContext.Provider value={currentPath}>
       <WorkspaceInfoContext.Provider value={workspaceInfo}>
+      <InstalledClisContext.Provider value={installedClis}>
       <DragContext.Provider value={dragApi}>
       <div style={outerStyle()}>
         <Show when={bootstrapped()} fallback={<Splash />}>
         <div style={windowStyle()}>
-          <Titlebar onToggleSettings={() => setSettingsOpen((o) => !o)} />
+          <Titlebar
+            onToggleSettings={() => setSettingsOpen((o) => !o)}
+            sidebarOpen={sidebarOpen()}
+            onToggleSidebar={toggleSidebar}
+            onAddProject={addWorkspace}
+          />
           <div style={{ flex: 1, display: "flex", "min-height": 0 }}>
             <Sidebar
               workspaces={workspaces()}
               active={activeWs()}
               setActive={setActiveWs}
-              onAdd={addWorkspace}
               density={density()}
+              open={sidebarOpen()}
             />
 
             <Show
@@ -2462,11 +2568,17 @@ const App: Component = () => {
                     onCloseTab={handleCloseTab}
                     onDrop={handleDrop}
                   />
-                  <For each={terminalTabsInWs()}>
+                  <For each={allPtyTabs()}>
                     {(t) => (
                       <XtermPane
                         sessionId={t.id}
                         visible={activeTabIds().has(t.id)}
+                        command={
+                          t.kind === "terminal"
+                            ? undefined
+                            : installedClis().get(t.kind)
+                        }
+                        cliSessionId={t.cliSessionId}
                       />
                     )}
                   </For>
@@ -2487,6 +2599,7 @@ const App: Component = () => {
         />
       </div>
       </DragContext.Provider>
+      </InstalledClisContext.Provider>
       </WorkspaceInfoContext.Provider>
       </WorkspaceContext.Provider>
     </ThemeContext.Provider>

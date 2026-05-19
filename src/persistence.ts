@@ -14,6 +14,7 @@ export interface SessionRow {
   projectId: string;
   kind: string;
   title: string;
+  cliSessionId?: string | null;
 }
 
 // ─── Slim layout JSON stored in project_layouts.tree_json ────────────

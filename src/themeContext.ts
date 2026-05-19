@@ -16,3 +16,7 @@ export const WorkspaceInfoContext = createContext<WorkspaceInfo>({
   node: () => null,
   branch: () => null,
 });
+
+export const InstalledClisContext = createContext<Accessor<Map<string, string>>>(
+  () => new Map<string, string>(),
+);

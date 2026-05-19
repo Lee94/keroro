@@ -20,9 +20,18 @@ export interface Theme {
   pixelCoral: string;
   pixelBlue: string;
   pixelGreen: string;
+  // Multiplier applied to every "card / button / panel" border-radius. Themes
+  // like Zed use 0 to enforce sharp corners; the default 1 keeps the original
+  // pixel values.
+  cornerScale: number;
 }
 
-export type ThemeName = "ember" | "forest" | "plum";
+export type ThemeName = "ember" | "forest" | "plum" | "zed";
+
+export function rad(t: Theme, px: number): string {
+  const v = px * t.cornerScale;
+  return v === 0 ? "0" : `${v}px`;
+}
 
 export const THEMES: Record<ThemeName, Theme> = {
   ember: {
@@ -47,6 +56,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     pixelCoral: "#ff6b4a",
     pixelBlue: "#6cb8ff",
     pixelGreen: "#7ec88d",
+    cornerScale: 1,
   },
   forest: {
     name: "forest",
@@ -70,6 +80,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     pixelCoral: "#d97a6c",
     pixelBlue: "#7bc2c0",
     pixelGreen: "#6dd58c",
+    cornerScale: 1,
   },
   plum: {
     name: "plum",
@@ -93,5 +104,30 @@ export const THEMES: Record<ThemeName, Theme> = {
     pixelCoral: "#e88a9e",
     pixelBlue: "#9aaef0",
     pixelGreen: "#9be6c0",
+    cornerScale: 1,
+  },
+  zed: {
+    name: "zed",
+    bg: "#fafafa",
+    chrome: "#ececec",
+    panel: "#f4f4f5",
+    panelAlt: "#ebebec",
+    panelDeep: "#e1e1e2",
+    border: "#e1e1e2",
+    borderStrong: "#c8c8c9",
+    text: "#383a42",
+    textDim: "#696c77",
+    textMuted: "#a0a1a7",
+    accent: "#5c79e3",
+    accentDim: "#3f5fc7",
+    amber: "#c18401",
+    green: "#50a14f",
+    blue: "#4078f2",
+    yellow: "#c18401",
+    red: "#e45649",
+    pixelCoral: "#e45649",
+    pixelBlue: "#4078f2",
+    pixelGreen: "#50a14f",
+    cornerScale: 0,
   },
 };

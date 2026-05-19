@@ -1,3 +1,4 @@
+mod claude;
 mod db;
 mod pty;
 mod sys_info;
@@ -24,6 +25,8 @@ pub fn run() {
             pty::pty_kill,
             sys_info::detect_node_version,
             sys_info::detect_git_branch,
+            sys_info::detect_clis,
+            claude::claude_spawn_args,
             db::projects_list,
             db::project_upsert,
             db::projects_replace,

@@ -18,11 +18,12 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id          TEXT PRIMARY KEY,
-    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    kind        TEXT NOT NULL,
-    title       TEXT NOT NULL,
-    created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    cli_session_id  TEXT,
+    created_at      INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 
@@ -52,6 +53,9 @@ pub fn open(app: &AppHandle) -> Result<Db, String> {
         .map_err(|e| format!("set foreign_keys: {e}"))?;
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("apply schema: {e}"))?;
+    // Migration: add cli_session_id to existing sessions tables. Silently
+    // ignore the "duplicate column" error from sqlite for already-migrated DBs.
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN cli_session_id TEXT", []);
     Ok(Db(Mutex::new(conn)))
 }
 
@@ -72,6 +76,8 @@ pub struct SessionRow {
     pub project_id: String,
     pub kind: String,
     pub title: String,
+    #[serde(rename = "cliSessionId", default, skip_serializing_if = "Option::is_none")]
+    pub cli_session_id: Option<String>,
 }
 
 fn lock<'a>(db: &'a State<'_, Db>) -> Result<std::sync::MutexGuard<'a, Connection>, String> {
@@ -180,7 +186,7 @@ pub fn sessions_list(db: State<'_, Db>, project_id: String) -> Result<Vec<Sessio
     let conn = lock(&db)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, project_id, kind, title FROM sessions
+            "SELECT id, project_id, kind, title, cli_session_id FROM sessions
              WHERE project_id = ?1 ORDER BY created_at",
         )
         .map_err(|e| e.to_string())?;
@@ -191,6 +197,7 @@ pub fn sessions_list(db: State<'_, Db>, project_id: String) -> Result<Vec<Sessio
                 project_id: row.get(1)?,
                 kind: row.get(2)?,
                 title: row.get(3)?,
+                cli_session_id: row.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -236,16 +243,17 @@ pub fn sessions_replace(
         }
         let mut stmt = tx
             .prepare(
-                "INSERT INTO sessions (id, project_id, kind, title)
-                 VALUES (?1, ?2, ?3, ?4)
+                "INSERT INTO sessions (id, project_id, kind, title, cli_session_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
                  ON CONFLICT(id) DO UPDATE SET
                    project_id=excluded.project_id,
                    kind=excluded.kind,
-                   title=excluded.title",
+                   title=excluded.title,
+                   cli_session_id=excluded.cli_session_id",
             )
             .map_err(|e| e.to_string())?;
         for s in &sessions {
-            stmt.execute(params![s.id, s.project_id, s.kind, s.title])
+            stmt.execute(params![s.id, s.project_id, s.kind, s.title, s.cli_session_id])
                 .map_err(|e| e.to_string())?;
         }
     }

@@ -26,12 +26,68 @@ impl PtyManager {
 fn pick_shell(cwd: Option<&str>) -> CommandBuilder {
     let program = pick_program();
     let mut cmd = CommandBuilder::new(program);
+    apply_cwd(&mut cmd, cwd);
+    cmd
+}
+
+fn apply_cwd(cmd: &mut CommandBuilder, cwd: Option<&str>) {
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     } else if let Ok(home) = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
         cmd.cwd(home);
     }
-    cmd
+}
+
+// POSIX-shell single-quote escape: wraps the input in '...' and replaces any
+// embedded single quote with '\''. Needed because we pass the resolved binary
+// path to `zsh -c`, and zsh splits the argument on whitespace.
+#[cfg(not(windows))]
+fn shell_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for c in s.chars() {
+        if c == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(c);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+// Build a PTY command that runs `command` (an absolute path or a name on PATH)
+// with the given extra args. On Unix we wrap in a login shell so the user's
+// PATH/init files are loaded — otherwise a .app launched from Finder inherits
+// a stripped env and the CLI's own dependencies (node, etc.) may not be found.
+fn run_command(command: &str, args: &[String], cwd: Option<&str>) -> CommandBuilder {
+    let resolved = crate::sys_info::find_cli(command)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| command.to_string());
+
+    #[cfg(not(windows))]
+    {
+        let mut shell_cmd = format!("exec {}", shell_quote(&resolved));
+        for a in args {
+            shell_cmd.push(' ');
+            shell_cmd.push_str(&shell_quote(a));
+        }
+        let mut cmd = CommandBuilder::new(pick_program());
+        cmd.arg("-l");
+        cmd.arg("-c");
+        cmd.arg(shell_cmd);
+        apply_cwd(&mut cmd, cwd);
+        cmd
+    }
+    #[cfg(windows)]
+    {
+        let mut cmd = CommandBuilder::new(resolved);
+        for a in args {
+            cmd.arg(a);
+        }
+        apply_cwd(&mut cmd, cwd);
+        cmd
+    }
 }
 
 #[cfg(windows)]
@@ -66,6 +122,8 @@ pub fn pty_spawn(
     cols: u16,
     rows: u16,
     cwd: Option<String>,
+    command: Option<String>,
+    args: Option<Vec<String>>,
 ) -> Result<(), String> {
     {
         let map = state.inner.lock().map_err(|e| e.to_string())?;
@@ -79,7 +137,13 @@ pub fn pty_spawn(
         .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
         .map_err(|e| e.to_string())?;
 
-    let cmd = pick_shell(cwd.as_deref());
+    let cmd = match command.as_deref() {
+        Some(c) if !c.is_empty() => {
+            let args = args.unwrap_or_default();
+            run_command(c, &args, cwd.as_deref())
+        }
+        _ => pick_shell(cwd.as_deref()),
+    };
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
 

@@ -53,9 +53,12 @@ function decodeBase64(payload: string): Uint8Array {
 // or moving the tab between leaves does not unmount and respawn the PTY.
 // The xterm container is a detached DOM node that is re-parented into
 // whichever leaf currently hosts the tab via the [[terminalHost]] registry.
-export const XtermPane: Component<{ sessionId: string; visible: boolean }> = (
-  props,
-) => {
+export const XtermPane: Component<{
+  sessionId: string;
+  visible: boolean;
+  command?: string;
+  cliSessionId?: string;
+}> = (props) => {
   const themeAccessor = useContext(ThemeContext);
   const workspaceCwd = useContext(WorkspaceContext);
 
@@ -116,11 +119,21 @@ export const XtermPane: Component<{ sessionId: string; visible: boolean }> = (
       invoke("pty_write", { id: props.sessionId, data }).catch(() => {});
     });
 
+    let args: string[] | undefined;
+    if (props.cliSessionId && props.command) {
+      args = await invoke<string[]>("claude_spawn_args", {
+        sessionId: props.cliSessionId,
+        cwd: workspaceCwd(),
+      }).catch(() => undefined);
+    }
+
     await invoke("pty_spawn", {
       id: props.sessionId,
       cols: term.cols || 80,
       rows: term.rows || 24,
       cwd: workspaceCwd(),
+      command: props.command,
+      args,
     }).catch((err) => {
       term.write(`\r\n\x1b[31mfailed to spawn pty: ${err}\x1b[0m\r\n`);
     });

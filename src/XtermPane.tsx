@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -10,7 +11,13 @@ import {
   useContext,
   type Component,
 } from "solid-js";
-import { ThemeContext, WorkspaceContext } from "./themeContext";
+import {
+  ThemeContext,
+  TerminalFontFamilyContext,
+  TerminalFontSizeContext,
+  WorkspaceContext,
+  findTerminalFontFamily,
+} from "./themeContext";
 import type { Theme } from "./themes";
 import { releaseTerminalHost, terminalHost } from "./terminalHost";
 import "@xterm/xterm/css/xterm.css";
@@ -61,18 +68,19 @@ export const XtermPane: Component<{
 }> = (props) => {
   const themeAccessor = useContext(ThemeContext);
   const workspaceCwd = useContext(WorkspaceContext);
+  const fontSizeAccessor = useContext(TerminalFontSizeContext);
+  const fontFamilyAccessor = useContext(TerminalFontFamilyContext);
 
   const container = document.createElement("div");
   container.style.width = "100%";
   container.style.height = "100%";
-  container.style.padding = "8px 10px 0";
+  container.style.padding = "4px 10px";
   container.style.boxSizing = "border-box";
   container.style.background = themeAccessor().panel;
 
   const term = new Terminal({
-    fontFamily:
-      "'Geist Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace",
-    fontSize: 13,
+    fontFamily: findTerminalFontFamily(fontFamilyAccessor()).stack,
+    fontSize: fontSizeAccessor(),
     lineHeight: 1.2,
     cursorBlink: true,
     cursorStyle: "bar",
@@ -88,6 +96,23 @@ export const XtermPane: Component<{
   let resizeObserver: ResizeObserver | null = null;
   let opened = false;
   let disposed = false;
+  let webgl: WebglAddon | null = null;
+
+  const tryLoadWebgl = () => {
+    if (disposed || webgl) return;
+    try {
+      const addon = new WebglAddon();
+      addon.onContextLoss(() => {
+        addon.dispose();
+        webgl = null;
+        queueMicrotask(tryLoadWebgl);
+      });
+      term.loadAddon(addon);
+      webgl = addon;
+    } catch {
+      webgl = null;
+    }
+  };
 
   const doFit = () => {
     if (disposed) return;
@@ -149,6 +174,7 @@ export const XtermPane: Component<{
     }
     if (!opened) {
       term.open(container);
+      tryLoadWebgl();
       opened = true;
       resizeObserver = new ResizeObserver(() => doFit());
       resizeObserver.observe(container);
@@ -160,6 +186,20 @@ export const XtermPane: Component<{
     const t = themeAccessor();
     term.options.theme = xtermTheme(t);
     container.style.background = t.panel;
+  });
+
+  createEffect(() => {
+    const size = fontSizeAccessor();
+    if (term.options.fontSize === size) return;
+    term.options.fontSize = size;
+    queueMicrotask(doFit);
+  });
+
+  createEffect(() => {
+    const stack = findTerminalFontFamily(fontFamilyAccessor()).stack;
+    if (term.options.fontFamily === stack) return;
+    term.options.fontFamily = stack;
+    queueMicrotask(doFit);
   });
 
   createEffect(() => {
@@ -177,6 +217,8 @@ export const XtermPane: Component<{
     unlistenData?.();
     unlistenExit?.();
     invoke("pty_kill", { id: props.sessionId }).catch(() => {});
+    webgl?.dispose();
+    webgl = null;
     term.dispose();
     if (container.parentElement) {
       container.parentElement.removeChild(container);

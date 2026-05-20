@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-05-21
+
+### Fixed
+
+- **CI release build** — sync `pnpm-lock.yaml` with the new
+  `@xterm/addon-webgl` dependency so `pnpm install --frozen-lockfile` no
+  longer fails on the release runners.
+
+### Changed
+
+- **CI**: bump `actions/setup-node` to Node 24 (was 20) to match the version
+  used locally.
+
 ## [0.2.0] - 2026-05-21
 
 ### Added
@@ -48,5 +61,6 @@ Initial release.
 - Per-project persistence of layout, sessions, and active project.
 - CI release workflow producing macOS arm64 and Windows builds.
 
+[0.2.1]: https://github.com/Lee94/keroro/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Lee94/keroro/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Lee94/keroro/releases/tag/v0.1.0

@@ -336,6 +336,9 @@ const Titlebar: Component<{
   onAddProject: () => void;
 }> = (props) => {
   const theme = useTheme;
+  const [sidebarHover, setSidebarHover] = createSignal(false);
+  const [addProjectHover, setAddProjectHover] = createSignal(false);
+  const [tweaksHover, setTweaksHover] = createSignal(false);
   return (
     <div
       data-tauri-drag-region
@@ -356,13 +359,19 @@ const Titlebar: Component<{
       </Show>
       <button
         onClick={props.onToggleSidebar}
+        onMouseEnter={() => setSidebarHover(true)}
+        onMouseLeave={() => setSidebarHover(false)}
         title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
         aria-pressed={!props.sidebarOpen}
         style={{
-          background: props.sidebarOpen ? "transparent" : theme().panelAlt,
+          background: sidebarHover()
+            ? theme().borderStrong
+            : props.sidebarOpen
+              ? "transparent"
+              : theme().panelAlt,
           border: "none",
           padding: "4px",
-          color: props.sidebarOpen ? theme().textDim : theme().text,
+          color: props.sidebarOpen && !sidebarHover() ? theme().textDim : theme().text,
           cursor: "pointer",
           display: "flex",
           "align-items": "center",
@@ -370,12 +379,6 @@ const Titlebar: Component<{
           "border-radius": rad(theme(), 4),
           transition: "background 90ms, color 90ms",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = theme().panelAlt)}
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.background = props.sidebarOpen
-            ? "transparent"
-            : theme().panelAlt)
-        }
       >
         <Icon name="sidebar" size={15} />
       </button>
@@ -390,12 +393,14 @@ const Titlebar: Component<{
       />
       <button
         onClick={props.onAddProject}
+        onMouseEnter={() => setAddProjectHover(true)}
+        onMouseLeave={() => setAddProjectHover(false)}
         title="New project"
         style={{
-          background: "transparent",
+          background: addProjectHover() ? theme().borderStrong : "transparent",
           border: "none",
           padding: "4px 8px",
-          color: theme().textDim,
+          color: addProjectHover() ? theme().text : theme().textDim,
           cursor: "pointer",
           display: "flex",
           "align-items": "center",
@@ -403,14 +408,7 @@ const Titlebar: Component<{
           "border-radius": rad(theme(), 6),
           "font-size": "11px",
           "font-family": "var(--mono)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = theme().panelAlt;
-          e.currentTarget.style.color = theme().text;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = theme().textDim;
+          transition: "background 90ms, color 90ms",
         }}
       >
         <Icon name="plus" size={11} />
@@ -419,11 +417,13 @@ const Titlebar: Component<{
       <div style={{ flex: 1 }} />
       <button
         onClick={props.onToggleSettings}
+        onMouseEnter={() => setTweaksHover(true)}
+        onMouseLeave={() => setTweaksHover(false)}
         style={{
-          background: "transparent",
+          background: tweaksHover() ? theme().borderStrong : "transparent",
           border: `1px solid ${theme().border}`,
           padding: "4px 8px",
-          color: theme().textDim,
+          color: tweaksHover() ? theme().text : theme().textDim,
           cursor: "pointer",
           display: "flex",
           "align-items": "center",
@@ -432,14 +432,7 @@ const Titlebar: Component<{
           "font-size": "11px",
           "font-family": "var(--mono)",
           "margin-right": isWindows ? "6px" : 0,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = theme().panelAlt;
-          e.currentTarget.style.color = theme().text;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.color = theme().textDim;
+          transition: "background 90ms, color 90ms",
         }}
       >
         <Icon name="settings" size={12} />
@@ -502,9 +495,11 @@ const WorkspaceItem: Component<{
   ws: Workspace;
   active: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }> = (props) => {
   const theme = useTheme;
   const [hover, setHover] = createSignal(false);
+  const [deleteHover, setDeleteHover] = createSignal(false);
   const renderMascot = () => {
     const t = theme();
     switch (props.ws.mascot) {
@@ -584,6 +579,34 @@ const WorkspaceItem: Component<{
           {props.ws.path}
         </div>
       </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onDelete();
+        }}
+        onMouseEnter={() => setDeleteHover(true)}
+        onMouseLeave={() => setDeleteHover(false)}
+        title="Remove project"
+        aria-label="Remove project"
+        style={{
+          background: deleteHover() ? theme().borderStrong : "transparent",
+          border: "none",
+          padding: 0,
+          width: "20px",
+          height: "20px",
+          "border-radius": rad(theme(), 4),
+          display: "flex",
+          "align-items": "center",
+          "justify-content": "center",
+          color: deleteHover() ? theme().text : theme().textMuted,
+          cursor: "pointer",
+          "flex-shrink": 0,
+          opacity: hover() ? 1 : 0,
+          transition: "opacity 120ms, background 90ms, color 90ms",
+        }}
+      >
+        <Icon name="close" size={10} />
+      </button>
     </div>
   );
 };
@@ -592,6 +615,7 @@ const Sidebar: Component<{
   workspaces: Workspace[];
   active: string;
   setActive: (id: string) => void;
+  onDelete: (id: string) => void;
   density: Density;
   open: boolean;
 }> = (props) => {
@@ -642,6 +666,7 @@ const Sidebar: Component<{
                 ws={ws}
                 active={props.active === ws.id}
                 onClick={() => props.setActive(ws.id)}
+                onDelete={() => props.onDelete(ws.id)}
               />
             )}
           </For>
@@ -1187,6 +1212,7 @@ const TabBar: Component<{
 }> = (props) => {
   const theme = useTheme;
   const [menuOpen, setMenuOpen] = createSignal(false);
+  const [addHover, setAddHover] = createSignal(false);
   return (
     <div
       style={{
@@ -1214,8 +1240,10 @@ const TabBar: Component<{
       <div style={{ position: "relative" }}>
         <button
           onClick={() => setMenuOpen((o) => !o)}
+          onMouseEnter={() => setAddHover(true)}
+          onMouseLeave={() => setAddHover(false)}
           style={{
-            background: "transparent",
+            background: addHover() ? theme().borderStrong : "transparent",
             border: "none",
             cursor: "pointer",
             width: "26px",
@@ -1225,15 +1253,8 @@ const TabBar: Component<{
             display: "flex",
             "align-items": "center",
             "justify-content": "center",
-            color: theme().textMuted,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = theme().panelAlt;
-            e.currentTarget.style.color = theme().text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = theme().textMuted;
+            color: addHover() ? theme().text : theme().textMuted,
+            transition: "background 90ms, color 90ms",
           }}
         >
           <Icon name="plus" size={12} />
@@ -2028,6 +2049,7 @@ const TweaksPanel: Component<{
   setDensity: (d: Density) => void;
 }> = (props) => {
   const theme = useTheme;
+  const [closeHover, setCloseHover] = createSignal(false);
   return (
     <Show when={props.open}>
       <div
@@ -2055,15 +2077,18 @@ const TweaksPanel: Component<{
           <span style={{ "font-size": "13px", "font-weight": 600, color: theme().text }}>Tweaks</span>
           <button
             onClick={props.onClose}
+            onMouseEnter={() => setCloseHover(true)}
+            onMouseLeave={() => setCloseHover(false)}
             style={{
-              background: "transparent",
+              background: closeHover() ? theme().borderStrong : "transparent",
               border: "none",
               cursor: "pointer",
-              color: theme().textDim,
+              color: closeHover() ? theme().text : theme().textDim,
               padding: "4px",
               display: "flex",
               "align-items": "center",
               "border-radius": rad(theme(), 4),
+              transition: "background 90ms, color 90ms",
             }}
           >
             <Icon name="close" size={11} />
@@ -2375,6 +2400,22 @@ const App: Component = () => {
     setActiveWs(ws.id);
   };
 
+  const removeWorkspace = (id: string) => {
+    const list = workspaces();
+    if (!list.some((w) => w.id === id)) return;
+    const filtered = list.filter((w) => w.id !== id);
+    setWorkspaces(filtered);
+    if (activeWs() === id) {
+      setActiveWs(filtered[0]?.id ?? "");
+    }
+    setPanes((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
   const current = (): WorkspacePanes | undefined => panes()[activeWs()];
   const currentPath = (): string | undefined =>
     workspaces().find((w) => w.id === activeWs())?.path;
@@ -2539,6 +2580,7 @@ const App: Component = () => {
               workspaces={workspaces()}
               active={activeWs()}
               setActive={setActiveWs}
+              onDelete={removeWorkspace}
               density={density()}
               open={sidebarOpen()}
             />

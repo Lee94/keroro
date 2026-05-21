@@ -10,6 +10,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon } from "../ui/Icon";
+import { useT } from "../i18n";
 import { isMac, isWindows, TitlebarHeight } from "../platform";
 
 const TrafficLights: Component = () => {
@@ -142,6 +143,7 @@ export const Titlebar: Component<{
   onAddProject: () => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const [sidebarHover, setSidebarHover] = createSignal(false);
   const [addProjectHover, setAddProjectHover] = createSignal(false);
   const [tweaksHover, setTweaksHover] = createSignal(false);
@@ -167,7 +169,7 @@ export const Titlebar: Component<{
         onClick={props.onToggleSidebar}
         onMouseEnter={() => setSidebarHover(true)}
         onMouseLeave={() => setSidebarHover(false)}
-        title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        title={props.sidebarOpen ? t("hideSidebar") : t("showSidebar")}
         aria-pressed={!props.sidebarOpen}
         style={{
           background: sidebarHover()
@@ -202,7 +204,7 @@ export const Titlebar: Component<{
         onClick={props.onAddProject}
         onMouseEnter={() => setAddProjectHover(true)}
         onMouseLeave={() => setAddProjectHover(false)}
-        title="New project"
+        title={t("newProjectTooltip")}
         style={{
           background: addProjectHover() ? theme().borderStrong : "transparent",
           border: "none",
@@ -219,7 +221,7 @@ export const Titlebar: Component<{
         }}
       >
         <Icon name="plus" size={11} />
-        <span>new project</span>
+        <span>{t("newProjectLabel")}</span>
       </button>
       <div style={{ flex: 1 }} />
       <button
@@ -243,7 +245,7 @@ export const Titlebar: Component<{
         }}
       >
         <Icon name="settings" size={12} />
-        <span>tweaks</span>
+        <span>{t("tweaksLabel")}</span>
       </button>
       <Show when={isWindows}>
         <WindowsControls />

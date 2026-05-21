@@ -8,8 +8,10 @@ import {
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon } from "../ui/Icon";
+import { useT } from "../i18n";
 import { InstalledClisContext } from "../themeContext";
 import { AgentMascot } from "./AgentMascot";
+import { needsAttentionTabs } from "./attention";
 import { TAB_DRAG_MIME, useDrag } from "./drag";
 import { CLI_REGISTRY, type AgentKind, type Tab } from "./types";
 
@@ -72,6 +74,19 @@ const TabItem: Component<{
       >
         {props.tab.title}
       </span>
+      <Show when={needsAttentionTabs().has(props.tab.id)}>
+        <span
+          title="Waiting for input"
+          style={{
+            width: "6px",
+            height: "6px",
+            "border-radius": "50%",
+            background: theme().amber,
+            "flex-shrink": 0,
+            "box-shadow": `0 0 6px ${theme().amber}80`,
+          }}
+        />
+      </Show>
       <Show when={props.onClose}>
         <button
           onClick={(e) => {
@@ -111,9 +126,10 @@ const AddMenu: Component<{
   anchorBelow?: boolean;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const installedClis = useContext(InstalledClisContext);
   const items = (): { kind: AgentKind; label: string }[] => [
-    { kind: "terminal", label: "Terminal" },
+    { kind: "terminal", label: t("addMenuTerminal") },
     ...CLI_REGISTRY.filter((c) => installedClis().has(c.kind)).map(
       ({ kind, label }) => ({ kind, label }),
     ),

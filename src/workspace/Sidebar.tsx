@@ -2,6 +2,7 @@ import { createSignal, For, Show, type Component } from "solid-js";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon } from "../ui/Icon";
+import { useT } from "../i18n";
 import {
   CubeMascot,
   MushroomMascot,
@@ -13,10 +14,12 @@ import type { Density, Workspace } from "./types";
 const WorkspaceItem: Component<{
   ws: Workspace;
   active: boolean;
+  hasAttention: boolean;
   onClick: () => void;
   onDelete: () => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const [hover, setHover] = createSignal(false);
   const [deleteHover, setDeleteHover] = createSignal(false);
   const renderMascot = () => {
@@ -98,34 +101,64 @@ const WorkspaceItem: Component<{
           {props.ws.path}
         </div>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onDelete();
-        }}
-        onMouseEnter={() => setDeleteHover(true)}
-        onMouseLeave={() => setDeleteHover(false)}
-        title="Remove project"
-        aria-label="Remove project"
+      {/* Attention dot + delete button share the right-side slot. The dot
+        * shows by default; on hover the delete button fades in over it so the
+        * row only ever exposes the most relevant affordance. */}
+      <div
         style={{
-          background: deleteHover() ? theme().borderStrong : "transparent",
-          border: "none",
-          padding: 0,
+          position: "relative",
           width: "20px",
           height: "20px",
-          "border-radius": rad(theme(), 4),
-          display: "flex",
-          "align-items": "center",
-          "justify-content": "center",
-          color: deleteHover() ? theme().text : theme().textMuted,
-          cursor: "pointer",
           "flex-shrink": 0,
-          opacity: hover() ? 1 : 0,
-          transition: "opacity 120ms, background 90ms, color 90ms",
         }}
       >
-        <Icon name="close" size={10} />
-      </button>
+        <Show when={props.hasAttention}>
+          <span
+            title="Terminal waiting for input"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "6px",
+              height: "6px",
+              "border-radius": "50%",
+              background: theme().amber,
+              "box-shadow": `0 0 6px ${theme().amber}80`,
+              opacity: hover() ? 0 : 1,
+              transition: "opacity 120ms",
+              "pointer-events": "none",
+            }}
+          />
+        </Show>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onDelete();
+          }}
+          onMouseEnter={() => setDeleteHover(true)}
+          onMouseLeave={() => setDeleteHover(false)}
+          title={t("removeProject")}
+          aria-label={t("removeProject")}
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: deleteHover() ? theme().borderStrong : "transparent",
+            border: "none",
+            padding: 0,
+            "border-radius": rad(theme(), 4),
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            color: deleteHover() ? theme().text : theme().textMuted,
+            cursor: "pointer",
+            opacity: hover() ? 1 : 0,
+            transition: "opacity 120ms, background 90ms, color 90ms",
+          }}
+        >
+          <Icon name="close" size={10} />
+        </button>
+      </div>
     </div>
   );
 };
@@ -137,8 +170,10 @@ export const Sidebar: Component<{
   onDelete: (id: string) => void;
   density: Density;
   open: boolean;
+  attentionWorkspaces: ReadonlySet<string>;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const fullWidth = () => (props.density === "compact" ? 220 : 248);
   return (
     <div
@@ -173,11 +208,13 @@ export const Sidebar: Component<{
                   "text-align": "center",
                 }}
               >
-                No folders yet.
+                {t("sidebarEmptyTitle")}
                 <br />
-                Use{" "}
-                <span style={{ color: theme().textDim }}>+ new project</span> in
-                the toolbar.
+                {t("sidebarEmptyHintPrefix")}
+                <span style={{ color: theme().textDim }}>
+                  {t("sidebarEmptyHintButton")}
+                </span>
+                {t("sidebarEmptyHintSuffix")}
               </div>
             }
           >
@@ -186,6 +223,7 @@ export const Sidebar: Component<{
                 <WorkspaceItem
                   ws={ws}
                   active={props.active === ws.id}
+                  hasAttention={props.attentionWorkspaces.has(ws.id)}
                   onClick={() => props.setActive(ws.id)}
                   onDelete={() => props.onDelete(ws.id)}
                 />

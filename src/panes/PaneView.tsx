@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
+import { useT } from "../i18n";
 import { TerminalMascot } from "../mascots";
 import { WorkspaceInfoContext } from "../themeContext";
 import { terminalHost } from "../terminalHost";
@@ -16,6 +17,7 @@ import { TabBar } from "./TabBar";
 import { DropOverlay } from "./DropOverlay";
 import { PaneFooter, type ChipDef } from "./Chip";
 import type { DragInfo } from "./drag";
+import { setSplitDragging } from "./splitDrag";
 import { MIN_PANE_PX } from "./tree";
 import {
   AGENT_LABEL,
@@ -37,6 +39,7 @@ const LeafPaneView: Component<{
   onDrop: (targetLeafId: string, side: DropSide, info: DragInfo) => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const info = useContext(WorkspaceInfoContext);
   const active = (): Tab | undefined => {
     const l = props.leaf;
@@ -167,7 +170,7 @@ const LeafPaneView: Component<{
               }}
             >
               <TerminalMascot size={20} color={theme().pixelGreen} />
-              <span>New terminal</span>
+              <span>{t("newTerminalButton")}</span>
             </button>
             <div
               style={{
@@ -176,7 +179,7 @@ const LeafPaneView: Component<{
                 "font-family": "var(--mono)",
               }}
             >
-              or drag a tab here from another pane
+              {t("dragTabHint")}
             </div>
           </div>
         </Show>
@@ -256,6 +259,11 @@ const SplitView: Component<{
     if (total <= 0) return;
 
     setDragging(true);
+    // Suppress xterm fit() + pty_resize for the duration of the drag — they
+    // run inside the per-terminal ResizeObserver at mouse-move rate and are
+    // the main source of split-drag lag. A drag-end effect on each pane
+    // performs the single real refit when this flips back to false.
+    setSplitDragging(true);
     const prevCursor = document.body.style.cursor;
     const prevSelect = document.body.style.userSelect;
     document.body.style.cursor = row ? "col-resize" : "row-resize";
@@ -274,6 +282,7 @@ const SplitView: Component<{
     };
     const onUp = () => {
       setDragging(false);
+      setSplitDragging(false);
       document.body.style.cursor = prevCursor;
       document.body.style.userSelect = prevSelect;
       window.removeEventListener("mousemove", onMove);

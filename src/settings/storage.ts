@@ -6,11 +6,21 @@ import {
   TERMINAL_FONT_SIZE_MAX,
   TERMINAL_FONT_SIZE_MIN,
 } from "../themeContext";
+import { detectDefaultLocale, type Locale } from "../i18n";
 
 export const SIDEBAR_OPEN_KEY = "faye:sidebarOpen";
 export const THEME_NAME_KEY = "faye:themeName";
 export const TERM_FONT_SIZE_KEY = "faye:termFontSize";
 export const TERM_FONT_FAMILY_KEY = "faye:termFontFamily";
+export const LOCALE_KEY = "faye:locale";
+
+export const readLocale = (): Locale => {
+  try {
+    const v = localStorage.getItem(LOCALE_KEY);
+    if (v === "en" || v === "zh") return v;
+  } catch {}
+  return detectDefaultLocale();
+};
 
 export const clampFontSize = (n: number): number => {
   if (!Number.isFinite(n)) return TERMINAL_FONT_SIZE_DEFAULT;

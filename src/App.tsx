@@ -23,6 +23,8 @@ import {
   TERMINAL_FONT_SIZE_DEFAULT,
   type WorkspaceInfo,
 } from "./themeContext";
+import { LocaleContext, type Locale } from "./i18n";
+import { needsAttentionTabs } from "./panes/attention";
 import { FayeMascot } from "./mascots";
 import { XtermPane } from "./XtermPane";
 import { useTheme } from "./ui/useTheme";
@@ -45,6 +47,7 @@ import {
   closeTabInTree,
   defaultPanes,
   loadPaneTree,
+  mapLeaves,
   moveTabInTree,
   paneTreeToLayout,
   saveProjectState,
@@ -63,12 +66,14 @@ import {
 } from "./panes/types";
 import { TweaksPanel } from "./settings/TweaksPanel";
 import {
+  LOCALE_KEY,
   SIDEBAR_OPEN_KEY,
   TERM_FONT_FAMILY_KEY,
   TERM_FONT_SIZE_KEY,
   THEME_NAME_KEY,
   clampFontSize,
   detectInstalledFont,
+  readLocale,
   readSidebarOpen,
   readTermFontFamily,
   readTermFontSize,
@@ -121,6 +126,13 @@ const App: Component = () => {
   const [installedFonts, setInstalledFonts] = createSignal<Set<string>>(
     new Set(),
   );
+  const [locale, setLocaleSignal] = createSignal<Locale>(readLocale());
+  const setLocale = (l: Locale) => {
+    setLocaleSignal(l);
+    try {
+      localStorage.setItem(LOCALE_KEY, l);
+    } catch {}
+  };
 
   const toggleSidebar = () => {
     setSidebarOpen((o) => {
@@ -380,13 +392,39 @@ const App: Component = () => {
     return out;
   });
 
+  // Set of workspace ids that contain at least one tab whose terminal is
+  // currently waiting for user input (detected by the buffer scanner in
+  // XtermPane). Drives the yellow dot on the sidebar workspace row.
+  const attentionWorkspaces = createMemo<Set<string>>(() => {
+    const attn = needsAttentionTabs();
+    const out = new Set<string>();
+    if (attn.size === 0) return out;
+    for (const [wsId, wp] of Object.entries(panes())) {
+      let hit = false;
+      walkLeaves(wp.root, (leaf) => {
+        if (hit) return;
+        for (const t of leaf.tabs) {
+          if (attn.has(t.id)) {
+            hit = true;
+            break;
+          }
+        }
+      });
+      if (hit) out.add(wsId);
+    }
+    return out;
+  });
+
+  // Only tabs in the active workspace count as "visible" — switching projects
+  // hides every PTY in the previous workspace so XtermPane can refit + refocus
+  // when it returns to view.
   const activeTabIds = createMemo<Set<string>>(() => {
     const s = new Set<string>();
-    for (const wp of Object.values(panes())) {
-      walkLeaves(wp.root, (leaf) => {
-        if (leaf.activeTab) s.add(leaf.activeTab);
-      });
-    }
+    const wp = panes()[activeWs()];
+    if (!wp) return s;
+    walkLeaves(wp.root, (leaf) => {
+      if (leaf.activeTab) s.add(leaf.activeTab);
+    });
     return s;
   });
 
@@ -485,6 +523,32 @@ const App: Component = () => {
     setRootForWs(wsId, closeTabInTree(wp.root, leafId, tabId));
   };
 
+  // Called when XtermPane auto-rotates a tab's cliSessionId after a failed
+  // claude --resume. Walks every workspace's pane tree, patches the matching
+  // tab in place, and re-publishes the panes signal — the existing debounced
+  // saveLayouts effect persists the new id so subsequent boots resume the
+  // fresh session instead of looping on the dead one.
+  const rotateTabCliSession = (tabId: string, newCliSessionId: string) => {
+    setPanes((prev) => {
+      const next: PanesByWs = {};
+      for (const [wsId, wp] of Object.entries(prev)) {
+        next[wsId] = {
+          root: mapLeaves(wp.root, (leaf) => {
+            const idx = leaf.tabs.findIndex((t) => t.id === tabId);
+            if (idx === -1) return leaf;
+            const newTabs = [...leaf.tabs];
+            newTabs[idx] = {
+              ...newTabs[idx],
+              cliSessionId: newCliSessionId,
+            };
+            return { ...leaf, tabs: newTabs };
+          }),
+        };
+      }
+      return next;
+    });
+  };
+
   const handleDropForWs = (
     wsId: string,
     targetLeafId: string,
@@ -546,6 +610,7 @@ const App: Component = () => {
 
   return (
     <ThemeContext.Provider value={themeAccessor}>
+      <LocaleContext.Provider value={locale}>
       <WorkspaceContext.Provider value={currentPath}>
       <WorkspaceInfoContext.Provider value={workspaceInfo}>
       <InstalledClisContext.Provider value={installedClis}>
@@ -569,6 +634,7 @@ const App: Component = () => {
               onDelete={removeWorkspace}
               density={density()}
               open={sidebarOpen()}
+              attentionWorkspaces={attentionWorkspaces()}
             />
 
             <Show
@@ -636,6 +702,9 @@ const App: Component = () => {
                           : installedClis().get(t.kind)
                       }
                       cliSessionId={t.cliSessionId}
+                      onCliSessionRotated={(newId) =>
+                        rotateTabCliSession(t.id, newId)
+                      }
                     />
                   )}
                 </For>
@@ -658,6 +727,8 @@ const App: Component = () => {
           termFontFamily={termFontFamily()}
           setTermFontFamily={setTermFontFamily}
           installedFonts={installedFonts()}
+          locale={locale()}
+          setLocale={setLocale}
         />
       </div>
       </DragContext.Provider>
@@ -666,6 +737,7 @@ const App: Component = () => {
       </InstalledClisContext.Provider>
       </WorkspaceInfoContext.Provider>
       </WorkspaceContext.Provider>
+      </LocaleContext.Provider>
     </ThemeContext.Provider>
   );
 };

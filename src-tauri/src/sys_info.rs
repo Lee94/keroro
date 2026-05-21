@@ -1,7 +1,17 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use serde::Serialize;
+
+// CreateProcess flag that suppresses the brief console window flash a GUI
+// Tauri host gets every time it spawns a console subprocess. Without it,
+// `node.exe --version` (called on boot + every project switch) pops a black
+// box for a frame.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Serialize)]
 pub struct CliInfo {
@@ -67,6 +77,8 @@ pub fn detect_node_version(cwd: Option<String>) -> Option<String> {
         cmd.current_dir(dir);
     }
     cmd.arg("--version");
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
     let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;

@@ -2,6 +2,7 @@ import { Show, type Component } from "solid-js";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon } from "../ui/Icon";
+import { useT } from "../i18n";
 import { FayeMascot } from "../mascots";
 
 export const EmptyWorkspace: Component<{
@@ -9,6 +10,7 @@ export const EmptyWorkspace: Component<{
   onAdd: () => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   return (
     <div
       style={{
@@ -30,9 +32,7 @@ export const EmptyWorkspace: Component<{
           "letter-spacing": "-0.01em",
         }}
       >
-        {props.hasWorkspaces
-          ? "Pick a folder from the sidebar"
-          : "No folder open"}
+        {props.hasWorkspaces ? t("pickFolder") : t("noFolderOpen")}
       </div>
       <Show when={!props.hasWorkspaces}>
         <button
@@ -58,7 +58,7 @@ export const EmptyWorkspace: Component<{
           }
         >
           <Icon name="plus" size={11} />
-          <span>Open folder</span>
+          <span>{t("openFolder")}</span>
         </button>
       </Show>
     </div>

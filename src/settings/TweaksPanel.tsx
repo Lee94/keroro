@@ -8,6 +8,7 @@ import {
   TERMINAL_FONT_SIZE_MIN,
   findTerminalFontFamily,
 } from "../themeContext";
+import { LOCALES, useT, type Locale } from "../i18n";
 import type { Density } from "../workspace/types";
 
 const RadioRow: Component<{
@@ -69,9 +70,14 @@ const TerminalFontFamilyRow: Component<{
   installed: Set<string>;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const selected = () => findTerminalFontFamily(props.value);
   const isAvailable = (value: string, primary: string | null) =>
     primary === null || props.installed.has(value);
+  // The system default option's label is the only one we localize — every
+  // other font name is a proper noun (Geist Mono, Fira Code, …).
+  const labelFor = (value: string, label: string) =>
+    value === "system" ? t("fontSystemDefault") : label;
   return (
     <div
       style={{
@@ -83,7 +89,7 @@ const TerminalFontFamilyRow: Component<{
       }}
     >
       <span style={{ "font-size": "11px", color: theme().textDim }}>
-        Terminal font family
+        {t("terminalFontFamily")}
       </span>
       <select
         value={props.value}
@@ -105,8 +111,8 @@ const TerminalFontFamilyRow: Component<{
             const available = isAvailable(f.value, f.primary);
             return (
               <option value={f.value} style={{ "font-family": f.stack }}>
-                {f.label}
-                {available ? "" : "  (not installed)"}
+                {labelFor(f.value, f.label)}
+                {available ? "" : `  ${t("fontNotInstalled")}`}
               </option>
             );
           }}
@@ -122,6 +128,7 @@ const TerminalFontSizeRow: Component<{
   reset: () => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const atMin = () => props.value <= TERMINAL_FONT_SIZE_MIN;
   const atMax = () => props.value >= TERMINAL_FONT_SIZE_MAX;
   const btn = (disabled: boolean) => ({
@@ -150,14 +157,14 @@ const TerminalFontSizeRow: Component<{
       }}
     >
       <span style={{ "font-size": "11px", color: theme().textDim }}>
-        Terminal font
+        {t("terminalFont")}
       </span>
       <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
         <button
           onClick={() => !atMin() && props.setValue(props.value - 1)}
           disabled={atMin()}
           style={btn(atMin())}
-          title="Shrink (Cmd/Ctrl -)"
+          title={t("shrinkFontTooltip")}
         >
           −
         </button>
@@ -174,7 +181,7 @@ const TerminalFontSizeRow: Component<{
             "text-align": "center",
             padding: "2px 4px",
           }}
-          title="Reset (Cmd/Ctrl 0)"
+          title={t("resetFontTooltip")}
         >
           {props.value}px
         </button>
@@ -182,7 +189,7 @@ const TerminalFontSizeRow: Component<{
           onClick={() => !atMax() && props.setValue(props.value + 1)}
           disabled={atMax()}
           style={btn(atMax())}
-          title="Enlarge (Cmd/Ctrl =)"
+          title={t("enlargeFontTooltip")}
         >
           +
         </button>
@@ -204,8 +211,11 @@ export const TweaksPanel: Component<{
   termFontFamily: string;
   setTermFontFamily: (v: string) => void;
   installedFonts: Set<string>;
+  locale: Locale;
+  setLocale: (l: Locale) => void;
 }> = (props) => {
   const theme = useTheme;
+  const t = useT();
   const [closeHover, setCloseHover] = createSignal(false);
   return (
     <Show when={props.open}>
@@ -234,7 +244,7 @@ export const TweaksPanel: Component<{
           <span
             style={{ "font-size": "13px", "font-weight": 600, color: theme().text }}
           >
-            Tweaks
+            {t("tweaksTitle")}
           </span>
           <button
             onClick={props.onClose}
@@ -256,23 +266,29 @@ export const TweaksPanel: Component<{
           </button>
         </div>
         <RadioRow
-          label="Palette"
+          label={t("language")}
+          value={props.locale}
+          onChange={(v) => props.setLocale(v as Locale)}
+          options={LOCALES.map((l) => ({ value: l.value, label: l.label }))}
+        />
+        <RadioRow
+          label={t("palette")}
           value={props.themeName}
           onChange={(v) => props.setTheme(v as ThemeName)}
           options={[
-            { value: "ember", label: "Ember" },
-            { value: "forest", label: "Forest" },
-            { value: "plum", label: "Plum" },
-            { value: "zed", label: "Zed Light" },
+            { value: "ember", label: t("themeEmber") },
+            { value: "forest", label: t("themeForest") },
+            { value: "plum", label: t("themePlum") },
+            { value: "zed", label: t("themeZedLight") },
           ]}
         />
         <RadioRow
-          label="Density"
+          label={t("density")}
           value={props.density}
           onChange={(v) => props.setDensity(v as Density)}
           options={[
-            { value: "cozy", label: "Cozy" },
-            { value: "compact", label: "Compact" },
+            { value: "cozy", label: t("densityCozy") },
+            { value: "compact", label: t("densityCompact") },
           ]}
         />
         <TerminalFontSizeRow

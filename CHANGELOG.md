@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+
+- **Faster project switching on Windows** — every workspace's pane tree is now
+  mounted simultaneously and toggled with `display: none/flex`, so switching
+  projects no longer unmounts leaves, re-parents xterm containers, or
+  triggers `ResizeObserver`-driven refits across the pane. The visible cost
+  is a few extra DOM nodes; the perceived cost was the WebView2 + WebGL
+  reflow burst on every click.
+- **Cache `detect_node_version` / `detect_git_branch` per cwd** — node
+  version is cached for the session (spawning `node.exe --version` on
+  Windows is 200–500ms and the value almost never changes); git branch is
+  seeded from cache on switch so the footer chip no longer flashes empty
+  while the 5s poll runs.
+
 ## [0.2.1] - 2026-05-21
 
 ### Fixed

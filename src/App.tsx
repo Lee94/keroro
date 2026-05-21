@@ -60,7 +60,6 @@ import {
   type PanesByWs,
   type SplitPane,
   type Tab,
-  type WorkspacePanes,
 } from "./panes/types";
 import { TweaksPanel } from "./settings/TweaksPanel";
 import {
@@ -364,7 +363,6 @@ const App: Component = () => {
     });
   };
 
-  const current = (): WorkspacePanes | undefined => panes()[activeWs()];
   const currentPath = (): string | undefined =>
     workspaces().find((w) => w.id === activeWs())?.path;
 
@@ -392,25 +390,57 @@ const App: Component = () => {
     return s;
   });
 
-  // Per-workspace footer info — node version + git branch
+  // Per-workspace footer info — node version + git branch.
+  // Node version per cwd is cached for the session (it almost never changes,
+  // and spawning `node.exe --version` on Windows is ~200-500ms). Branch is
+  // cached as a *seed* on switch so the chip doesn't flash empty, then the
+  // 5s interval refreshes against disk.
   const [nodeVersion, setNodeVersion] = createSignal<string | null>(null);
   const [gitBranch, setGitBranch] = createSignal<string | null>(null);
+  const nodeVersionCache = new Map<string, string | null>();
+  const gitBranchCache = new Map<string, string | null>();
 
   createEffect(() => {
     const path = currentPath();
-    setNodeVersion(null);
-    setGitBranch(null);
-    if (!path) return;
+    if (!path) {
+      setNodeVersion(null);
+      setGitBranch(null);
+      return;
+    }
 
+    if (nodeVersionCache.has(path)) {
+      setNodeVersion(nodeVersionCache.get(path) ?? null);
+    } else {
+      // Don't clear the chip first — let the previous value stay until we
+      // know the new cwd's value, so the footer doesn't flicker on switch.
+      invoke<string | null>("detect_node_version", { cwd: path })
+        .then((v) => {
+          const value = v ?? null;
+          nodeVersionCache.set(path, value);
+          if (currentPath() === path) setNodeVersion(value);
+        })
+        .catch(() => {
+          nodeVersionCache.set(path, null);
+          if (currentPath() === path) setNodeVersion(null);
+        });
+    }
+
+    setGitBranch(gitBranchCache.get(path) ?? null);
     let alive = true;
     const refreshBranch = () => {
       invoke<string | null>("detect_git_branch", { cwd: path })
-        .then((v) => alive && setGitBranch(v ?? null))
-        .catch(() => alive && setGitBranch(null));
+        .then((v) => {
+          if (!alive) return;
+          const value = v ?? null;
+          gitBranchCache.set(path, value);
+          setGitBranch(value);
+        })
+        .catch(() => {
+          if (!alive) return;
+          gitBranchCache.set(path, null);
+          setGitBranch(null);
+        });
     };
-    invoke<string | null>("detect_node_version", { cwd: path })
-      .then((v) => alive && setNodeVersion(v ?? null))
-      .catch(() => alive && setNodeVersion(null));
     refreshBranch();
     const id = setInterval(refreshBranch, 5000);
     onCleanup(() => {
@@ -424,46 +454,49 @@ const App: Component = () => {
     branch: gitBranch,
   };
 
-  const setRoot = (newRoot: PaneNode) => {
-    const ws = activeWs();
-    if (!ws || !panes()[ws]) return;
-    setPanes((prev) => ({ ...prev, [ws]: { root: newRoot } }));
+  const setRootForWs = (wsId: string, newRoot: PaneNode) => {
+    if (!wsId || !panes()[wsId]) return;
+    setPanes((prev) => ({ ...prev, [wsId]: { root: newRoot } }));
   };
 
-  const setLeafByActive = (
+  const setLeafForWs = (
+    wsId: string,
     leafId: string,
     patch: (leaf: LeafPane) => LeafPane,
   ) => {
-    const cur = current();
-    if (!cur) return;
-    setRoot(updateLeaf(cur.root, leafId, patch));
+    const wp = panes()[wsId];
+    if (!wp) return;
+    setRootForWs(wsId, updateLeaf(wp.root, leafId, patch));
   };
 
-  const setSplitByActive = (
+  const setSplitForWs = (
+    wsId: string,
     splitId: string,
     patch: (split: SplitPane) => SplitPane,
   ) => {
-    const cur = current();
-    if (!cur) return;
-    setRoot(updateSplit(cur.root, splitId, patch));
+    const wp = panes()[wsId];
+    if (!wp) return;
+    setRootForWs(wsId, updateSplit(wp.root, splitId, patch));
   };
 
-  const handleCloseTab = (leafId: string, tabId: string) => {
-    const cur = current();
-    if (!cur) return;
-    setRoot(closeTabInTree(cur.root, leafId, tabId));
+  const handleCloseTabForWs = (wsId: string, leafId: string, tabId: string) => {
+    const wp = panes()[wsId];
+    if (!wp) return;
+    setRootForWs(wsId, closeTabInTree(wp.root, leafId, tabId));
   };
 
-  const handleDrop = (
+  const handleDropForWs = (
+    wsId: string,
     targetLeafId: string,
     side: DropSide,
     info: DragInfo,
   ) => {
-    const cur = current();
-    if (!cur) return;
-    setRoot(
+    const wp = panes()[wsId];
+    if (!wp) return;
+    setRootForWs(
+      wsId,
       moveTabInTree(
-        cur.root,
+        wp.root,
         info.sourceLeafId,
         info.sourceTabId,
         targetLeafId,
@@ -539,46 +572,74 @@ const App: Component = () => {
             />
 
             <Show
-              when={current()}
+              when={workspaces().length > 0}
               fallback={
-                <EmptyWorkspace
-                  hasWorkspaces={workspaces().length > 0}
-                  onAdd={addWorkspace}
-                />
+                <EmptyWorkspace hasWorkspaces={false} onAdd={addWorkspace} />
               }
             >
-              {(p) => (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    "min-width": 0,
-                    "min-height": 0,
+              {/* Stack every workspace's pane tree at once; toggle visibility
+                * with display:none/flex so switching projects doesn't unmount
+                * leaves / re-parent xterm containers / refit. Costs a few
+                * extra DOM nodes but eliminates the per-switch reflow burst
+                * (especially heavy on Windows WebView2 + WebGL). */}
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  position: "relative",
+                  "min-width": 0,
+                  "min-height": 0,
+                }}
+              >
+                <For each={workspaces()}>
+                  {(ws) => {
+                    const wp = createMemo(() => panes()[ws.id]);
+                    return (
+                      <Show when={wp()}>
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: activeWs() === ws.id ? "flex" : "none",
+                            "min-width": 0,
+                            "min-height": 0,
+                          }}
+                        >
+                          <PaneTreeView
+                            node={wp()!.root}
+                            setLeaf={(leafId, patch) =>
+                              setLeafForWs(ws.id, leafId, patch)
+                            }
+                            setSplit={(splitId, patch) =>
+                              setSplitForWs(ws.id, splitId, patch)
+                            }
+                            onCloseTab={(leafId, tabId) =>
+                              handleCloseTabForWs(ws.id, leafId, tabId)
+                            }
+                            onDrop={(targetLeafId, side, info) =>
+                              handleDropForWs(ws.id, targetLeafId, side, info)
+                            }
+                          />
+                        </div>
+                      </Show>
+                    );
                   }}
-                >
-                  <PaneTreeView
-                    node={p().root}
-                    setLeaf={setLeafByActive}
-                    setSplit={setSplitByActive}
-                    onCloseTab={handleCloseTab}
-                    onDrop={handleDrop}
-                  />
-                  <For each={allPtyTabs()}>
-                    {(t) => (
-                      <XtermPane
-                        sessionId={t.id}
-                        visible={activeTabIds().has(t.id)}
-                        command={
-                          t.kind === "terminal"
-                            ? undefined
-                            : installedClis().get(t.kind)
-                        }
-                        cliSessionId={t.cliSessionId}
-                      />
-                    )}
-                  </For>
-                </div>
-              )}
+                </For>
+                <For each={allPtyTabs()}>
+                  {(t) => (
+                    <XtermPane
+                      sessionId={t.id}
+                      visible={activeTabIds().has(t.id)}
+                      command={
+                        t.kind === "terminal"
+                          ? undefined
+                          : installedClis().get(t.kind)
+                      }
+                      cliSessionId={t.cliSessionId}
+                    />
+                  )}
+                </For>
+              </div>
             </Show>
           </div>
         </div>

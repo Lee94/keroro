@@ -9,7 +9,6 @@ import {
   type Component,
   type JSX,
 } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { THEMES, rad, type ThemeName } from "./themes";
 import {
@@ -84,11 +83,15 @@ import {
 import {
   debounce,
   deleteProject,
+  detectClis,
+  detectGitStatus,
+  detectNodeVersion,
   getActiveProject,
   listProjects,
   replaceProjects,
   setActiveProject as dbSetActiveProject,
   upsertProject,
+  type GitStatus,
 } from "./persistence";
 import "./App.css";
 
@@ -225,7 +228,7 @@ const App: Component = () => {
   });
 
   onMount(() => {
-    invoke<{ kind: string; found: boolean; path: string | null }[]>("detect_clis")
+    detectClis()
       .then((infos) => {
         const next = new Map<string, string>();
         for (const c of infos) {
@@ -473,21 +476,21 @@ const App: Component = () => {
     return s;
   });
 
-  // Per-workspace footer info — node version + git branch.
+  // Per-workspace footer info — node version + git status.
   // Node version per cwd is cached for the session (it almost never changes,
-  // and spawning `node.exe --version` on Windows is ~200-500ms). Branch is
+  // and spawning `node.exe --version` on Windows is ~200-500ms). Git status is
   // cached as a *seed* on switch so the chip doesn't flash empty, then the
   // 5s interval refreshes against disk.
   const [nodeVersion, setNodeVersion] = createSignal<string | null>(null);
-  const [gitBranch, setGitBranch] = createSignal<string | null>(null);
+  const [gitStatus, setGitStatus] = createSignal<GitStatus | null>(null);
   const nodeVersionCache = new Map<string, string | null>();
-  const gitBranchCache = new Map<string, string | null>();
+  const gitStatusCache = new Map<string, GitStatus | null>();
 
   createEffect(() => {
     const path = currentPath();
     if (!path) {
       setNodeVersion(null);
-      setGitBranch(null);
+      setGitStatus(null);
       return;
     }
 
@@ -496,7 +499,7 @@ const App: Component = () => {
     } else {
       // Don't clear the chip first — let the previous value stay until we
       // know the new cwd's value, so the footer doesn't flicker on switch.
-      invoke<string | null>("detect_node_version", { cwd: path })
+      detectNodeVersion(path)
         .then((v) => {
           const value = v ?? null;
           nodeVersionCache.set(path, value);
@@ -508,24 +511,24 @@ const App: Component = () => {
         });
     }
 
-    setGitBranch(gitBranchCache.get(path) ?? null);
+    setGitStatus(gitStatusCache.get(path) ?? null);
     let alive = true;
-    const refreshBranch = () => {
-      invoke<string | null>("detect_git_branch", { cwd: path })
+    const refreshGitStatus = () => {
+      detectGitStatus(path)
         .then((v) => {
           if (!alive) return;
           const value = v ?? null;
-          gitBranchCache.set(path, value);
-          setGitBranch(value);
+          gitStatusCache.set(path, value);
+          setGitStatus(value);
         })
         .catch(() => {
           if (!alive) return;
-          gitBranchCache.set(path, null);
-          setGitBranch(null);
+          gitStatusCache.set(path, null);
+          setGitStatus(null);
         });
     };
-    refreshBranch();
-    const id = setInterval(refreshBranch, 5000);
+    refreshGitStatus();
+    const id = setInterval(refreshGitStatus, 5000);
     onCleanup(() => {
       alive = false;
       clearInterval(id);
@@ -534,7 +537,8 @@ const App: Component = () => {
 
   const workspaceInfo: WorkspaceInfo = {
     node: nodeVersion,
-    branch: gitBranch,
+    branch: () => gitStatus()?.branch ?? null,
+    gitStatus,
   };
 
   const setRootForWs = (wsId: string, newRoot: PaneNode) => {

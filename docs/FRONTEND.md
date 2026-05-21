@@ -28,7 +28,7 @@ Solid.js 1.9 + TypeScript 5.6 + Vite 6 + xterm.js 6。无路由库、无状态�
 
 - `ThemeContext` — 当前主题
 - `WorkspaceContext` — 当前项目 + 切换函数
-- `WorkspaceInfoContext` — 项目元信息(node 版本、git branch)
+- `WorkspaceInfoContext` — 项目元信息(node 版本、git branch/status)
 - `InstalledClisContext` — 已检测到的 CLI 列表
 - `DragContext`(定义在 `App.tsx` 内) — Tab 拖拽源
 

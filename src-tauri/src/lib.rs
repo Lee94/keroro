@@ -14,9 +14,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(pty::PtyManager::new())
         .setup(|app| {
-            let database = db::open(app.handle()).map_err(|e| -> Box<dyn std::error::Error> {
-                e.into()
-            })?;
+            let database =
+                db::open(app.handle()).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             app.manage(database);
             Ok(())
         })
@@ -27,6 +26,7 @@ pub fn run() {
             pty::pty_kill,
             sys_info::detect_node_version,
             sys_info::detect_git_branch,
+            sys_info::detect_git_status,
             sys_info::detect_clis,
             claude::claude_spawn_args,
             db::projects_list,

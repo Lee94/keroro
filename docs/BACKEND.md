@@ -4,7 +4,7 @@ Tauri 2 + Rust edition 2021。后端职责清单:
 
 - 启动 PTY 子进程,把字节流推给前端(`pty.rs`)
 - 维护 SQLite 数据库(`db.rs`)
-- 探测系统状态:CLI 是否存在、node 版本、git 分支(`sys_info.rs`)
+- 探测系统状态:CLI 是否存在、node 版本、git 分支/状态(`sys_info.rs`)
 - 计算 Claude Code 会话恢复参数(`claude.rs`)
 - 注册所有 Tauri 命令(`lib.rs`)
 
@@ -58,6 +58,7 @@ Tauri 2 + Rust edition 2021。后端职责清单:
 `detect_*` 系列会被前端在切项目时调用。约定:
 
 - `detect_git_branch` **直接读 `.git/HEAD` 文本**,不 fork `git` 子进程。理由:启动 git 进程在 macOS 上 ~50ms,叠加几个项目就很卡。
+- `detect_git_status` 用 `git status --porcelain=v1 --branch` 拿分支/dirty 状态,再用 `git diff --numstat HEAD --` 拿新增/删除行数;前端按低频 interval 刷新。
 - `detect_node_version` 不得不 fork `node --version`——可接受,因为切项目是低频。
 - `detect_clis` 只查 PATH 和几个固定目录(`extra_lookup_paths`),不递归扫硬盘。
 

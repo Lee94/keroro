@@ -17,6 +17,21 @@ export interface SessionRow {
   cliSessionId?: string | null;
 }
 
+export interface CliInfo {
+  kind: string;
+  found: boolean;
+  path: string | null;
+}
+
+export interface GitStatus {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  additions: number;
+  deletions: number;
+  dirty: boolean;
+}
+
 // ─── Slim layout JSON stored in project_layouts.tree_json ────────────
 export type LayoutNode = LayoutSplit | LayoutLeaf;
 export interface LayoutSplit {
@@ -66,6 +81,15 @@ export const getActiveProject = (): Promise<string | null> =>
 
 export const setActiveProject = (id: string | null): Promise<void> =>
   invoke("active_project_set", { id });
+
+export const detectClis = (): Promise<CliInfo[]> =>
+  invoke<CliInfo[]>("detect_clis");
+
+export const detectNodeVersion = (cwd: string): Promise<string | null> =>
+  invoke<string | null>("detect_node_version", { cwd });
+
+export const detectGitStatus = (cwd: string): Promise<GitStatus | null> =>
+  invoke<GitStatus | null>("detect_git_status", { cwd });
 
 // ─── Debounce helper ─────────────────────────────────────────────────
 export function debounce<A extends unknown[]>(

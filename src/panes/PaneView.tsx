@@ -71,8 +71,32 @@ const LeafPaneView: Component<{
       const ver = info.node();
       if (ver) out.push({ icon: "node", label: ver, color: t.green });
     }
-    const branch = info.branch();
+    const git = info.gitStatus();
+    const branch = git?.branch ?? info.branch();
     if (branch) out.push({ icon: "branch", label: branch, color: t.amber });
+    if (git) {
+      const sync = [
+        git.ahead > 0 ? `↑${git.ahead}` : null,
+        git.behind > 0 ? `↓${git.behind}` : null,
+      ].filter(Boolean);
+      if (sync.length > 0) {
+        out.push({ icon: "branch", label: sync.join(" "), color: t.blue });
+      }
+
+      if (git.dirty) {
+        const changedLines = [
+          git.additions > 0 ? `+${git.additions}` : null,
+          git.deletions > 0 ? `-${git.deletions}` : null,
+        ].filter(Boolean);
+        out.push({
+          icon: "dot",
+          label: changedLines.length > 0 ? changedLines.join(" ") : "dirty",
+          color: t.yellow,
+        });
+      } else {
+        out.push({ icon: "dot", label: "clean", color: t.green });
+      }
+    }
     return out;
   };
 

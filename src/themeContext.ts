@@ -1,5 +1,6 @@
 import { createContext, type Accessor } from "solid-js";
 import { THEMES, type Theme } from "./themes";
+import type { GitStatus } from "./persistence";
 
 export const ThemeContext = createContext<() => Theme>(() => THEMES.ember);
 
@@ -10,11 +11,13 @@ export const WorkspaceContext = createContext<() => string | undefined>(
 export interface WorkspaceInfo {
   node: Accessor<string | null>;
   branch: Accessor<string | null>;
+  gitStatus: Accessor<GitStatus | null>;
 }
 
 export const WorkspaceInfoContext = createContext<WorkspaceInfo>({
   node: () => null,
   branch: () => null,
+  gitStatus: () => null,
 });
 
 export const InstalledClisContext = createContext<Accessor<Map<string, string>>>(

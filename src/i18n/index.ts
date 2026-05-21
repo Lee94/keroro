@@ -51,6 +51,22 @@ interface Dict {
   processExited: string;
   spawnFailed: string;
   resumeFailedRetrying: string;
+  // Terminal search
+  searchPlaceholder: string;
+  searchPrev: string;
+  searchNext: string;
+  searchClose: string;
+  searchNoMatches: string;
+  // Updater
+  updateAvailableLabel: string;
+  updateDownloading: string;
+  updateReady: string;
+  updateInstall: string;
+  updateLater: string;
+  updateCheckButton: string;
+  updateChecking: string;
+  updateUpToDate: string;
+  updateErrorPrefix: string;
 }
 
 const en: Dict = {
@@ -90,6 +106,20 @@ const en: Dict = {
   processExited: "[process exited]",
   spawnFailed: "failed to spawn pty",
   resumeFailedRetrying: "[resume failed — starting a fresh session]",
+  searchPlaceholder: "Search terminal",
+  searchPrev: "Previous match (Shift+Enter)",
+  searchNext: "Next match (Enter)",
+  searchClose: "Close (Esc)",
+  searchNoMatches: "No matches",
+  updateAvailableLabel: "Update available",
+  updateDownloading: "Downloading update…",
+  updateReady: "Update ready — restarting…",
+  updateInstall: "Install & Restart",
+  updateLater: "Later",
+  updateCheckButton: "Check for updates",
+  updateChecking: "Checking…",
+  updateUpToDate: "You're up to date",
+  updateErrorPrefix: "Update check failed:",
 };
 
 const zh: Dict = {
@@ -129,6 +159,20 @@ const zh: Dict = {
   processExited: "[进程已退出]",
   spawnFailed: "终端启动失败",
   resumeFailedRetrying: "[恢复会话失败，正在创建新会话]",
+  searchPlaceholder: "搜索终端",
+  searchPrev: "上一处 (Shift+Enter)",
+  searchNext: "下一处 (Enter)",
+  searchClose: "关闭 (Esc)",
+  searchNoMatches: "无匹配",
+  updateAvailableLabel: "发现新版本",
+  updateDownloading: "正在下载更新…",
+  updateReady: "已就绪 — 即将重启…",
+  updateInstall: "安装并重启",
+  updateLater: "稍后",
+  updateCheckButton: "检查更新",
+  updateChecking: "检查中…",
+  updateUpToDate: "已是最新版本",
+  updateErrorPrefix: "检查更新失败：",
 };
 
 export type DictKey = keyof Dict;

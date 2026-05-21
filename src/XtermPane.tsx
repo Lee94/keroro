@@ -1,5 +1,6 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke } from "@tauri-apps/api/core";
@@ -22,6 +23,13 @@ import { useT } from "./i18n";
 import { splitDragging } from "./panes/splitDrag";
 import { clearAttention, detectAttention, setNeedsAttention } from "./panes/attention";
 import { releaseTerminalHost, terminalHost } from "./terminalHost";
+import {
+  openTerminalSearch,
+  releaseTerminalSearch,
+  setTerminalSearchOps,
+  useTerminalSearch,
+} from "./terminalSearch";
+import { isMac } from "./platform";
 import "@xterm/xterm/css/xterm.css";
 
 function xtermTheme(t: Theme) {
@@ -100,6 +108,71 @@ export const XtermPane: Component<{
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.loadAddon(new WebLinksAddon());
+  const search = new SearchAddon();
+  term.loadAddon(search);
+
+  const searchEntry = useTerminalSearch(props.sessionId);
+
+  const searchOptions = () => {
+    const tm = themeAccessor();
+    return {
+      decorations: {
+        matchBackground: tm.amber,
+        matchBorder: tm.amber,
+        matchOverviewRuler: tm.amber,
+        activeMatchBackground: tm.accent,
+        activeMatchBorder: tm.accent,
+        activeMatchColorOverviewRuler: tm.accent,
+      },
+    };
+  };
+
+  search.onDidChangeResults(({ resultIndex, resultCount }) => {
+    if (resultCount === 0) {
+      searchEntry.setResults({ index: 0, count: 0 });
+    } else {
+      searchEntry.setResults({ index: resultIndex + 1, count: resultCount });
+    }
+  });
+
+  setTerminalSearchOps(props.sessionId, {
+    findNext: (q) => {
+      if (!q) {
+        search.clearDecorations();
+        searchEntry.setResults(null);
+        return false;
+      }
+      return search.findNext(q, searchOptions());
+    },
+    findPrev: (q) => {
+      if (!q) {
+        search.clearDecorations();
+        searchEntry.setResults(null);
+        return false;
+      }
+      return search.findPrevious(q, searchOptions());
+    },
+    clear: () => {
+      search.clearDecorations();
+      searchEntry.setResults(null);
+    },
+    focusTerminal: () => term.focus(),
+  });
+
+  // Capture Ctrl/Cmd+F before xterm forwards it to the PTY. Returning false
+  // from attachCustomKeyEventHandler swallows the event, so the running shell
+  // never sees the keystroke. Only fires while this terminal owns focus, so
+  // we naturally search the right session.
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== "keydown") return true;
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (mod && !e.altKey && (e.key === "f" || e.key === "F")) {
+      e.preventDefault();
+      openTerminalSearch(props.sessionId);
+      return false;
+    }
+    return true;
+  });
 
   let unlistenData: UnlistenFn | null = null;
   let unlistenExit: UnlistenFn | null = null;
@@ -350,6 +423,8 @@ export const XtermPane: Component<{
     }
     clearAttention(props.sessionId);
     releaseTerminalHost(props.sessionId);
+    setTerminalSearchOps(props.sessionId, null);
+    releaseTerminalSearch(props.sessionId);
   });
 
   return null;

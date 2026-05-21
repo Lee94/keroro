@@ -52,11 +52,23 @@ jobs:
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing keys for the Tauri updater. Generate with
+          # `pnpm tauri signer generate -- -w ~/.tauri/keroro.key`, then
+          # add the *private key file contents* as TAURI_SIGNING_PRIVATE_KEY
+          # and its passphrase as TAURI_SIGNING_PRIVATE_KEY_PASSWORD in
+          # GitHub repo secrets. The matching public key goes into
+          # `src-tauri/tauri.conf.json -> plugins.updater.pubkey`.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('keroro {0}', github.ref_name) || '' }}
           releaseDraft: false
           prerelease: false
+          # Windows builds the app via NSIS; tell the action to point the
+          # updater manifest at the .nsis.zip artifact (the only Windows
+          # bundle target that ships a `.sig` alongside).
+          updaterJsonPreferNsis: true
           args: --target ${{ matrix.target }}
 
       - name: upload build artifacts

@@ -21,17 +21,49 @@ const TabItem: Component<{
   active: boolean;
   onClick: () => void;
   onClose: (() => void) | null;
+  onRename: (title: string) => void;
 }> = (props) => {
   const theme = useTheme;
   const { setDrag } = useDrag();
   const [hover, setHover] = createSignal(false);
   const [closeHover, setCloseHover] = createSignal(false);
+  const [editing, setEditing] = createSignal(false);
+  const [draft, setDraft] = createSignal("");
+  let editRef: HTMLInputElement | undefined;
+
+  const beginEdit = () => {
+    setDraft(props.tab.title);
+    setEditing(true);
+    queueMicrotask(() => {
+      editRef?.focus();
+      editRef?.select();
+    });
+  };
+
+  const commit = () => {
+    if (!editing()) return;
+    const next = draft().trim();
+    setEditing(false);
+    if (next && next !== props.tab.title) props.onRename(next);
+  };
+
+  const cancel = () => {
+    setEditing(false);
+  };
+
   return (
     <div
-      onClick={props.onClick}
+      onClick={() => {
+        if (editing()) return;
+        props.onClick();
+      }}
+      onDblClick={(e) => {
+        e.stopPropagation();
+        if (!editing()) beginEdit();
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      draggable={true}
+      draggable={!editing()}
       onDragStart={(e) => {
         // Synchronously enable pointer-events on drop overlays — must happen
         // before the browser fires the first dragover, so Solid's reactive
@@ -64,16 +96,56 @@ const TabItem: Component<{
       }}
     >
       <AgentMascot kind={props.tab.kind} size={14} />
-      <span
-        style={{
-          "font-size": "12px",
-          color: props.active ? theme().text : theme().textDim,
-          "letter-spacing": "-0.01em",
-          "white-space": "nowrap",
-        }}
+      <Show
+        when={editing()}
+        fallback={
+          <span
+            style={{
+              "font-size": "12px",
+              color: props.active ? theme().text : theme().textDim,
+              "letter-spacing": "-0.01em",
+              "white-space": "nowrap",
+            }}
+          >
+            {props.tab.title}
+          </span>
+        }
       >
-        {props.tab.title}
-      </span>
+        <input
+          ref={editRef}
+          type="text"
+          value={draft()}
+          spellcheck={false}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDblClick={(e) => e.stopPropagation()}
+          onInput={(e) => setDraft(e.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancel();
+            }
+          }}
+          style={{
+            "font-size": "12px",
+            color: theme().text,
+            background: theme().panelDeep,
+            border: `1px solid ${theme().borderStrong}`,
+            "border-radius": rad(theme(), 4),
+            padding: "1px 4px",
+            outline: "none",
+            "letter-spacing": "-0.01em",
+            "font-family": "var(--ui)",
+            width: `${Math.max(60, draft().length * 7 + 16)}px`,
+            "max-width": "240px",
+          }}
+        />
+      </Show>
       <Show when={needsAttentionTabs().has(props.tab.id)}>
         <span
           title="Waiting for input"
@@ -214,6 +286,7 @@ export const TabBar: Component<{
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onAdd: (kind: AgentKind) => void;
+  onRename: (id: string, title: string) => void;
   addAnchorBelow?: boolean;
 }> = (props) => {
   const theme = useTheme;
@@ -240,6 +313,7 @@ export const TabBar: Component<{
             active={t.id === props.activeId}
             onClick={() => props.onActivate(t.id)}
             onClose={() => props.onClose(t.id)}
+            onRename={(title) => props.onRename(t.id, title)}
           />
         )}
       </For>

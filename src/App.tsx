@@ -30,6 +30,8 @@ import { XtermPane } from "./XtermPane";
 import { useTheme } from "./ui/useTheme";
 import { isMac } from "./platform";
 import { Titlebar } from "./chrome/Titlebar";
+import { UpdateBanner } from "./chrome/UpdateBanner";
+import { bootUpdateCheck } from "./update";
 import { Sidebar } from "./workspace/Sidebar";
 import { EmptyWorkspace } from "./workspace/EmptyWorkspace";
 import {
@@ -219,6 +221,10 @@ const App: Component = () => {
   });
 
   onMount(() => {
+    bootUpdateCheck();
+  });
+
+  onMount(() => {
     invoke<{ kind: string; found: boolean; path: string | null }[]>("detect_clis")
       .then((infos) => {
         const next = new Map<string, string>();
@@ -275,10 +281,32 @@ const App: Component = () => {
   const persistedProjectIds = new Set<string>();
   const lastSavedLayout = new Map<string, string>();
 
+  // Fingerprint must cover both structural layout (so re-tiling persists) AND
+  // per-tab session fields the user can edit at runtime — title, kind,
+  // cliSessionId. Earlier this only hashed the layout, so renaming a tab
+  // didn't trigger a save and the new title was lost on reload.
+  const layoutFingerprint = (root: PaneNode): string => {
+    const tabs: Array<Pick<Tab, "id" | "kind" | "title" | "cliSessionId">> = [];
+    walkLeaves(root, (leaf) => {
+      for (const t of leaf.tabs) {
+        tabs.push({
+          id: t.id,
+          kind: t.kind,
+          title: t.title,
+          cliSessionId: t.cliSessionId,
+        });
+      }
+    });
+    return JSON.stringify({
+      layout: paneTreeToLayout(root),
+      sessions: tabs,
+    });
+  };
+
   const debouncedSaveLayouts = debounce((p: PanesByWs, ids: Set<string>) => {
     for (const id of Object.keys(p)) {
       if (!ids.has(id)) continue;
-      const json = JSON.stringify(paneTreeToLayout(p[id].root));
+      const json = layoutFingerprint(p[id].root);
       if (lastSavedLayout.get(id) === json) continue;
       lastSavedLayout.set(id, json);
       saveProjectState(id, p[id].root).catch((e) =>
@@ -346,10 +374,7 @@ const App: Component = () => {
       const initial = defaultPanes();
       await saveProjectState(ws.id, initial.root);
       persistedProjectIds.add(ws.id);
-      lastSavedLayout.set(
-        ws.id,
-        JSON.stringify(paneTreeToLayout(initial.root)),
-      );
+      lastSavedLayout.set(ws.id, layoutFingerprint(initial.root));
       setPanes((prev) => ({ ...prev, [ws.id]: initial }));
     } catch (err) {
       console.error("create project failed", err);
@@ -382,12 +407,32 @@ const App: Component = () => {
   // tree. Mounted at the App root so switching workspaces re-parents the
   // xterm DOM (via the terminalHost registry) instead of unmounting the
   // XtermPane and killing the PTY.
+  //
+  // <For> is keyed by item reference, so we stabilise the ref per tab.id —
+  // otherwise edits that produce a new Tab object (title rename, cliSession
+  // rotation) would re-key the row and tear down + respawn the PTY. XtermPane
+  // reads `cliSessionId` once at boot and never observes subsequent prop
+  // changes, so freezing the cached snapshot at first sight is safe.
+  const ptyTabRefs = new Map<string, Tab>();
   const allPtyTabs = createMemo<Tab[]>(() => {
+    const seen = new Set<string>();
     const out: Tab[] = [];
     for (const wp of Object.values(panes())) {
       walkLeaves(wp.root, (leaf) => {
-        for (const t of leaf.tabs) if (isPtyKind(t.kind)) out.push(t);
+        for (const t of leaf.tabs) {
+          if (!isPtyKind(t.kind)) continue;
+          seen.add(t.id);
+          let cached = ptyTabRefs.get(t.id);
+          if (!cached) {
+            cached = t;
+            ptyTabRefs.set(t.id, cached);
+          }
+          out.push(cached);
+        }
       });
+    }
+    for (const k of [...ptyTabRefs.keys()]) {
+      if (!seen.has(k)) ptyTabRefs.delete(k);
     }
     return out;
   });
@@ -626,6 +671,7 @@ const App: Component = () => {
             onToggleSidebar={toggleSidebar}
             onAddProject={addWorkspace}
           />
+          <UpdateBanner />
           <div style={{ flex: 1, display: "flex", "min-height": 0 }}>
             <Sidebar
               workspaces={workspaces()}

@@ -10,6 +10,12 @@ import {
 } from "../themeContext";
 import { LOCALES, useT, type Locale } from "../i18n";
 import type { Density } from "../workspace/types";
+import {
+  checkForUpdates,
+  pendingUpdate,
+  updateError,
+  updateStatus,
+} from "../update";
 
 const RadioRow: Component<{
   label: string;
@@ -301,7 +307,73 @@ export const TweaksPanel: Component<{
           setValue={props.setTermFontFamily}
           installed={props.installedFonts}
         />
+        <UpdateRow />
       </div>
     </Show>
+  );
+};
+
+const UpdateRow: Component = () => {
+  const theme = useTheme;
+  const t = useT();
+  const checking = () => updateStatus() === "checking";
+
+  const statusText = (): string | null => {
+    const s = updateStatus();
+    if (s === "checking") return t("updateChecking");
+    if (s === "up-to-date") return t("updateUpToDate");
+    if (s === "available") {
+      const p = pendingUpdate();
+      return p ? `v${p.currentVersion} → v${p.version}` : null;
+    }
+    if (s === "error") {
+      const err = updateError();
+      return err ? `${t("updateErrorPrefix")} ${err}` : t("updateErrorPrefix");
+    }
+    return null;
+  };
+
+  return (
+    <div
+      style={{
+        "margin-top": "16px",
+        "padding-top": "12px",
+        "border-top": `1px solid ${theme().border}`,
+      }}
+    >
+      <button
+        onClick={() => void checkForUpdates({ silent: false })}
+        disabled={checking()}
+        style={{
+          width: "100%",
+          padding: "6px 10px",
+          background: "transparent",
+          color: theme().text,
+          border: `1px solid ${theme().borderStrong}`,
+          "border-radius": rad(theme(), 6),
+          "font-size": "12px",
+          "font-family": "inherit",
+          cursor: checking() ? "default" : "pointer",
+          opacity: checking() ? 0.6 : 1,
+        }}
+      >
+        {checking() ? t("updateChecking") : t("updateCheckButton")}
+      </button>
+      <Show when={statusText()}>
+        <div
+          style={{
+            "margin-top": "8px",
+            "font-size": "11px",
+            color:
+              updateStatus() === "error" ? theme().red : theme().textDim,
+            "font-family": "var(--mono)",
+            "line-height": 1.4,
+            "word-break": "break-word",
+          }}
+        >
+          {statusText()}
+        </div>
+      </Show>
+    </div>
   );
 };

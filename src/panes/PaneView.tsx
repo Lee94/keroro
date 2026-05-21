@@ -16,6 +16,7 @@ import { AgentContent } from "../agents/AgentContent";
 import { TabBar } from "./TabBar";
 import { DropOverlay } from "./DropOverlay";
 import { PaneFooter, type ChipDef } from "./Chip";
+import { TerminalSearchBar } from "./TerminalSearchBar";
 import type { DragInfo } from "./drag";
 import { setSplitDragging } from "./splitDrag";
 import { MIN_PANE_PX } from "./tree";
@@ -96,6 +97,14 @@ const LeafPaneView: Component<{
         }
         onClose={(id) => props.onClose(id)}
         onAdd={handleAdd}
+        onRename={(id, title) =>
+          props.setLeaf((leaf) => ({
+            ...leaf,
+            tabs: leaf.tabs.map((t) =>
+              t.id === id ? { ...t, title } : t,
+            ),
+          }))
+        }
       />
       <div
         style={{
@@ -187,6 +196,9 @@ const LeafPaneView: Component<{
           leafId={props.leaf.id}
           onDrop={(side, info) => props.onDrop(props.leaf.id, side, info)}
         />
+        <Show when={active() && isPtyKind(active()!.kind)}>
+          <TerminalSearchBar sessionId={active()!.id} />
+        </Show>
       </div>
       <PaneFooter chips={chips()} />
     </div>

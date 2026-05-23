@@ -13,6 +13,7 @@ import { TerminalMascot } from "../mascots";
 import { WorkspaceInfoContext } from "../themeContext";
 import { terminalHost } from "../terminalHost";
 import { AgentContent } from "../agents/AgentContent";
+import { defaultTabTitle } from "../sessionTitles";
 import { TabBar } from "./TabBar";
 import { DropOverlay } from "./DropOverlay";
 import { PaneFooter, type ChipDef } from "./Chip";
@@ -21,7 +22,6 @@ import type { DragInfo } from "./drag";
 import { setSplitDragging } from "./splitDrag";
 import { MIN_PANE_PX } from "./tree";
 import {
-  AGENT_LABEL,
   isPtyKind,
   newId,
   type AgentKind,
@@ -52,7 +52,7 @@ const LeafPaneView: Component<{
     const newTab: Tab = {
       id,
       kind,
-      title: AGENT_LABEL[kind].toLowerCase().replace(" ", "-"),
+      title: defaultTabTitle(kind),
       cliSessionId: kind === "claude" ? crypto.randomUUID() : undefined,
     };
     props.setLeaf((leaf) => ({

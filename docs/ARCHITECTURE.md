@@ -57,8 +57,14 @@ PTY 输出通过 `emit("pty:{id}:data", base64)` 推给前端,前端 `listen` �
 | 命令 | 返回 |
 | --- | --- |
 | `claude_spawn_args(session_id, cwd?)` | `["--resume", id]` 或 `["--session-id", id]` |
+| `claude_session_title(session_id, cwd?)` | `Option<String>`,会话 JSONL 里第一条用户消息(截断到 40 字符) |
+| `claude_unlock_session(session_id)` | `bool`,扫 `~/.claude/sessions/*.json`,若有匹配 sessionId 但 pid 已死的"僵尸"注册文件则删除,返回是否解锁成功 |
 
-逻辑:把 cwd 规范化后把 `/` 和 `.` 全替换成 `-`,在 `~/.claude/projects/<encoded>/<session-id>.jsonl` 找文件;存在则 `--resume`,否则 `--session-id` 创建新会话。
+`claude_spawn_args` 逻辑:把 cwd 规范化、剥掉 Windows 的 `\\?\` 扩展前缀,再把 `/`、`\`、`:`、`.` 全替换成 `-`,在 `~/.claude/projects/<encoded>/<session-id>.jsonl` 找文件;存在则 `--resume`,否则 `--session-id` 创建新会话。**Windows 上务必同时替换 `\` 和 `:`**,否则查找路径与 Claude 实际写入的目录对不上(如 `D:\work\keroro` 应编码为 `D--work-keroro`,而不是把反斜杠和冒号保留)。
+
+`claude_session_title` 复用同一份路径,读 JSONL,挑第一条 `type=user` 且 `content` 为字符串的条目作为 tab 自动标题——前端 `XtermPane` 在挂载后轮询调用,命中后停止。
+
+> 接新的 code CLI(claude / codex / gemini …)的完整清单见 [BACKEND.md#集成一个新的-code-cli](BACKEND.md#集成一个新的-code-cliclaude--codex--未来的-gemini--pi-)。
 
 ### 持久化 (`db.rs`)
 | 命令 | 说明 |

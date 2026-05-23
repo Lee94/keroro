@@ -91,6 +91,15 @@ export const detectNodeVersion = (cwd: string): Promise<string | null> =>
 export const detectGitStatus = (cwd: string): Promise<GitStatus | null> =>
   invoke<GitStatus | null>("detect_git_status", { cwd });
 
+export const claudeSessionTitle = (
+  sessionId: string,
+  cwd: string | undefined,
+): Promise<string | null> =>
+  invoke<string | null>("claude_session_title", { sessionId, cwd });
+
+export const claudeUnlockSession = (sessionId: string): Promise<boolean> =>
+  invoke<boolean>("claude_unlock_session", { sessionId });
+
 // ─── Debounce helper ─────────────────────────────────────────────────
 export function debounce<A extends unknown[]>(
   fn: (...args: A) => void | Promise<void>,

@@ -440,6 +440,22 @@ const App: Component = () => {
     return out;
   });
 
+  // Owning-workspace cwd per tab. XtermPane needs this independently of
+  // the active workspace because polling work (auto-title, future probes)
+  // must use the *tab's* cwd, not whatever workspace is currently focused.
+  const tabCwds = createMemo<Map<string, string>>(() => {
+    const out = new Map<string, string>();
+    const wsById = new Map(workspaces().map((w) => [w.id, w.path]));
+    for (const [wsId, wp] of Object.entries(panes())) {
+      const path = wsById.get(wsId);
+      if (!path) continue;
+      walkLeaves(wp.root, (leaf) => {
+        for (const t of leaf.tabs) out.set(t.id, path);
+      });
+    }
+    return out;
+  });
+
   // Set of workspace ids that contain at least one tab whose terminal is
   // currently waiting for user input (detected by the buffer scanner in
   // XtermPane). Drives the yellow dot on the sidebar workspace row.
@@ -752,6 +768,7 @@ const App: Component = () => {
                           : installedClis().get(t.kind)
                       }
                       cliSessionId={t.cliSessionId}
+                      cwd={tabCwds().get(t.id)}
                       onCliSessionRotated={(newId) =>
                         rotateTabCliSession(t.id, newId)
                       }

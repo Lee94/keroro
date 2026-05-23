@@ -23,6 +23,8 @@ import { useT } from "./i18n";
 import { splitDragging } from "./panes/splitDrag";
 import { clearAttention, detectAttention, setNeedsAttention } from "./panes/attention";
 import { releaseTerminalHost, terminalHost } from "./terminalHost";
+import { getSessionTitle, setSessionTitle } from "./sessionTitles";
+import { claudeSessionTitle, claudeUnlockSession } from "./persistence";
 import {
   openTerminalSearch,
   releaseTerminalSearch,
@@ -76,6 +78,13 @@ export const XtermPane: Component<{
   command?: string;
   cliSessionId?: string;
   /**
+   * cwd of the workspace that owns this tab. Passed explicitly because
+   * [[WorkspaceContext]] always returns the currently *active* workspace's
+   * path — that's wrong for tabs whose workspace isn't the active one
+   * (e.g. background polling of [[claude_session_title]]).
+   */
+  cwd?: string;
+  /**
    * Invoked when we auto-rotate the CLI session id after a failed --resume
    * (e.g. the JSONL was deleted or another claude process holds it). The
    * parent should persist the new id back into the tab so future boots use
@@ -84,7 +93,8 @@ export const XtermPane: Component<{
   onCliSessionRotated?: (newCliSessionId: string) => void;
 }> = (props) => {
   const themeAccessor = useContext(ThemeContext);
-  const workspaceCwd = useContext(WorkspaceContext);
+  const activeWorkspaceCwd = useContext(WorkspaceContext);
+  const tabCwd = (): string | undefined => props.cwd ?? activeWorkspaceCwd();
   const fontSizeAccessor = useContext(TerminalFontSizeContext);
   const fontFamilyAccessor = useContext(TerminalFontFamilyContext);
   const t = useT();
@@ -228,18 +238,91 @@ export const XtermPane: Component<{
     }).catch(() => {});
   };
 
-  // Per-spawn state used by the exit handler to decide whether to auto-retry.
-  // `--resume` against a session that is occupied by another claude process
-  // or whose JSONL on disk was deleted/corrupted exits within a second or
-  // two; we treat a quick exit after a resume attempt as "session
-  // unavailable" and re-spawn with a fresh session id (the parent rotates
-  // the persisted cliSessionId via onCliSessionRotated).
+  // Per-spawn state used by the exit handler / live data scanner to decide
+  // whether to auto-rotate the cliSessionId and respawn.
+  //
+  // Two failure modes we recover from:
+  //  1. `--resume` against a JSONL that's been deleted/corrupted, OR against
+  //     a session another claude process still owns. Claude exits within a
+  //     second or two of spawn; the exit handler detects the quick exit and
+  //     rotates.
+  //  2. `Error: Session ID <uuid> is already in use.` printed by claude when
+  //     its own session registry still holds the id. This mode can leave
+  //     claude sitting at a non-interactive prompt WITHOUT exiting — so we
+  //     scan the live data stream for the phrase and force a rotation as
+  //     soon as we see it, rather than waiting for an exit that never comes.
+  //
+  // `rotating` guards against the exit handler also firing (and printing
+  // "[process exited]") while we're mid-respawn after a live-stream catch.
+  // `lastRotationAt` throttles rotations so a CLI that immediately re-hits
+  // the error on the fresh id doesn't put us in a hot loop, while still
+  // letting later occurrences during the same tab lifetime recover.
   let lastSpawnAt = 0;
   let lastSpawnUsedResume = false;
-  let retried = false;
+  let rotating = false;
+  let lastRotationAt = 0;
+  const ROTATION_THROTTLE_MS = 8000;
+
+  const tailLooksLikeSessionInUse = () => {
+    const buf = term.buffer.active;
+    const tailLen = Math.min(40, buf.length);
+    // Join the tail into one string so a wrapped error line (e.g. the
+    // 73-char `Error: Session ID <uuid> is already in use.` split across
+    // two visual rows in a narrow pane) still matches.
+    let joined = "";
+    for (let i = buf.length - tailLen; i < buf.length; i++) {
+      const line = buf.getLine(i);
+      if (!line) continue;
+      joined += line.translateToString(true);
+    }
+    return joined.includes("Session ID") && joined.includes("already in use");
+  };
+
+  // Two-step recovery:
+  //  1. Try to unlock the existing cliSessionId by GC'ing stale entries in
+  //     ~/.claude/sessions. If that works, we can respawn with the SAME id
+  //     and keep the user's conversation history.
+  //  2. If unlock returns false (no stale entry to remove, or the
+  //     registered pid is still alive), rotate to a fresh UUID. History is
+  //     lost but the tab becomes usable.
+  const rotateAndRespawn = () => {
+    if (rotating || disposed) return;
+    if (!props.command || !props.cliSessionId) return;
+    const now = Date.now();
+    if (now - lastRotationAt < ROTATION_THROTTLE_MS) return;
+    lastRotationAt = now;
+    rotating = true;
+    const originalId = props.cliSessionId;
+    invoke("pty_kill", { id: props.sessionId })
+      .catch(() => {})
+      .then(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        let nextId = originalId;
+        let keepingHistory = false;
+        try {
+          if (await claudeUnlockSession(originalId)) {
+            keepingHistory = true;
+          }
+        } catch {
+          // ignore — fall through to rotation
+        }
+        if (!keepingHistory) {
+          nextId = crypto.randomUUID();
+          props.onCliSessionRotated?.(nextId);
+        }
+        term.write(
+          keepingHistory
+            ? `\r\n\x1b[2m${t("sessionUnlockedResuming")}\x1b[0m\r\n`
+            : `\r\n\x1b[2m${t("resumeFailedRetrying")}\x1b[0m\r\n`,
+        );
+        await spawnAttempt(nextId);
+        rotating = false;
+      });
+  };
 
   // Buffer scanner — flips the per-tab "needs attention" flag when the bottom
-  // of the active buffer looks like a permission prompt or y/n question.
+  // of the active buffer looks like a permission prompt or y/n question, and
+  // catches the `Session ID … already in use` failure mode that doesn't exit.
   // Debounced so a chatty stream (many `pty://data` chunks in one frame)
   // costs one scan, not one per chunk. The scan re-evaluates the flag every
   // time, so the dot clears itself once claude/codex consumes the answer.
@@ -259,15 +342,27 @@ export const XtermPane: Component<{
         lines.push(line.translateToString(true));
       }
       setNeedsAttention(props.sessionId, detectAttention(lines));
+      if (tailLooksLikeSessionInUse()) {
+        console.debug(
+          "[XtermPane]",
+          props.sessionId,
+          "saw 'Session ID … already in use' in live buffer; rotating=",
+          rotating,
+          "throttled=",
+          Date.now() - lastRotationAt < ROTATION_THROTTLE_MS,
+        );
+        rotateAndRespawn();
+      }
     }, 250);
   };
 
   const spawnAttempt = async (cliSessionId: string | undefined) => {
+    const cwd = tabCwd();
     let args: string[] | undefined;
     if (cliSessionId && props.command) {
       args = await invoke<string[]>("claude_spawn_args", {
         sessionId: cliSessionId,
-        cwd: workspaceCwd(),
+        cwd,
       }).catch(() => undefined);
     }
     lastSpawnUsedResume = args?.[0] === "--resume";
@@ -277,7 +372,7 @@ export const XtermPane: Component<{
       id: props.sessionId,
       cols: term.cols || 80,
       rows: term.rows || 24,
-      cwd: workspaceCwd(),
+      cwd,
       command: props.command,
       args,
     }).catch((err) => {
@@ -307,24 +402,22 @@ export const XtermPane: Component<{
       return;
     }
     unlistenExit = await listen(`pty://exit/${props.sessionId}`, () => {
+      // We caused this exit by force-killing for a rotation; the respawn is
+      // in flight and will write its own retry message.
+      if (rotating) return;
       const livedFor = Date.now() - lastSpawnAt;
+      const sawInUse = tailLooksLikeSessionInUse();
       const canRetry =
-        !retried &&
-        lastSpawnUsedResume &&
-        livedFor < 4000 &&
         !!props.command &&
         !!props.cliSessionId &&
-        !disposed;
+        !disposed &&
+        // The "already in use" phrase is a definitive signal, so we trust
+        // it irrespective of how long claude lived. The 4s gate is only
+        // there to distinguish a quick `--resume` failure from a normal
+        // long-lived session the user just exited.
+        (sawInUse || (lastSpawnUsedResume && livedFor < 4000));
       if (canRetry) {
-        retried = true;
-        const newId = crypto.randomUUID();
-        term.write(`\r\n\x1b[2m${t("resumeFailedRetrying")}\x1b[0m\r\n`);
-        props.onCliSessionRotated?.(newId);
-        // pty_kill is idempotent: drops the dead session out of the manager
-        // map so the same tab id can be re-spawned cleanly.
-        invoke("pty_kill", { id: props.sessionId })
-          .catch(() => {})
-          .then(() => spawnAttempt(newId));
+        rotateAndRespawn();
         return;
       }
       term.write(`\r\n\x1b[2m${t("processExited")}\x1b[0m\r\n`);
@@ -407,6 +500,37 @@ export const XtermPane: Component<{
   createEffect(() => {
     if (splitDragging()) return;
     if (opened) queueMicrotask(doFit);
+  });
+
+  // Poll the claude session JSONL for the first user prompt so the tab can
+  // auto-title itself. Re-keys on cliSessionId so a rotation (after a stale
+  // `--resume`) restarts polling against the fresh id. The first user
+  // message is immutable for a given session, so we stop polling once we
+  // get a hit instead of running forever.
+  createEffect(() => {
+    const cliId = props.cliSessionId;
+    if (!cliId || !props.command) return;
+    if (getSessionTitle(cliId)) return;
+    let stopped = false;
+    const tick = () => {
+      if (stopped || disposed) return;
+      void claudeSessionTitle(cliId, tabCwd())
+        .then((title) => {
+          if (stopped || disposed) return;
+          if (title) {
+            setSessionTitle(cliId, title);
+            stopped = true;
+            clearInterval(handle);
+          }
+        })
+        .catch(() => {});
+    };
+    const handle = setInterval(tick, 5000);
+    tick();
+    onCleanup(() => {
+      stopped = true;
+      clearInterval(handle);
+    });
   });
 
   onCleanup(() => {

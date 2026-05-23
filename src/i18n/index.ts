@@ -51,6 +51,7 @@ interface Dict {
   processExited: string;
   spawnFailed: string;
   resumeFailedRetrying: string;
+  sessionUnlockedResuming: string;
   // Terminal search
   searchPlaceholder: string;
   searchPrev: string;
@@ -106,6 +107,7 @@ const en: Dict = {
   processExited: "[process exited]",
   spawnFailed: "failed to spawn pty",
   resumeFailedRetrying: "[resume failed — starting a fresh session]",
+  sessionUnlockedResuming: "[unlocked stale session — resuming with history]",
   searchPlaceholder: "Search terminal",
   searchPrev: "Previous match (Shift+Enter)",
   searchNext: "Next match (Enter)",
@@ -159,6 +161,7 @@ const zh: Dict = {
   processExited: "[进程已退出]",
   spawnFailed: "终端启动失败",
   resumeFailedRetrying: "[恢复会话失败，正在创建新会话]",
+  sessionUnlockedResuming: "[已解锁僵尸会话，正在恢复原对话]",
   searchPlaceholder: "搜索终端",
   searchPrev: "上一处 (Shift+Enter)",
   searchNext: "下一处 (Enter)",

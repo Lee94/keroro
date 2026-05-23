@@ -13,6 +13,7 @@ import { InstalledClisContext } from "../themeContext";
 import { AgentMascot } from "./AgentMascot";
 import { needsAttentionTabs } from "./attention";
 import { TAB_DRAG_MIME, useDrag } from "./drag";
+import { displayTabTitle } from "../sessionTitles";
 import { CLI_REGISTRY, type AgentKind, type Tab } from "./types";
 
 const TabItem: Component<{
@@ -32,7 +33,10 @@ const TabItem: Component<{
   let editRef: HTMLInputElement | undefined;
 
   const beginEdit = () => {
-    setDraft(props.tab.title);
+    // Seed the editor with what's actually visible (the auto-title for
+    // chat-agent tabs), so committing without changes is a no-op instead
+    // of stomping the auto-title onto the persisted `title`.
+    setDraft(displayTabTitle(props.tab));
     setEditing(true);
     queueMicrotask(() => {
       editRef?.focus();
@@ -44,7 +48,9 @@ const TabItem: Component<{
     if (!editing()) return;
     const next = draft().trim();
     setEditing(false);
-    if (next && next !== props.tab.title) props.onRename(next);
+    if (!next) return;
+    if (next === displayTabTitle(props.tab)) return;
+    props.onRename(next);
   };
 
   const cancel = () => {
@@ -107,7 +113,7 @@ const TabItem: Component<{
               "white-space": "nowrap",
             }}
           >
-            {props.tab.title}
+            {displayTabTitle(props.tab)}
           </span>
         }
       >

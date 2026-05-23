@@ -29,6 +29,8 @@ pub fn run() {
             sys_info::detect_git_status,
             sys_info::detect_clis,
             claude::claude_spawn_args,
+            claude::claude_session_title,
+            claude::claude_unlock_session,
             db::projects_list,
             db::project_upsert,
             db::projects_replace,

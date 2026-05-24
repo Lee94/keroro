@@ -141,12 +141,15 @@ export const Titlebar: Component<{
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   onAddProject: () => void;
+  onToggleTasks: () => void;
+  tasksOpen: boolean;
 }> = (props) => {
   const theme = useTheme();
   const t = useT();
   const [sidebarHover, setSidebarHover] = createSignal(false);
   const [addProjectHover, setAddProjectHover] = createSignal(false);
   const [tweaksHover, setTweaksHover] = createSignal(false);
+  const [tasksHover, setTasksHover] = createSignal(false);
   return (
     <div
       data-tauri-drag-region
@@ -224,6 +227,34 @@ export const Titlebar: Component<{
         <span>{t("newProjectLabel")}</span>
       </button>
       <div style={{ flex: 1 }} />
+      <button
+        onClick={props.onToggleTasks}
+        onMouseEnter={() => setTasksHover(true)}
+        onMouseLeave={() => setTasksHover(false)}
+        title={t("tasksTooltip")}
+        aria-pressed={props.tasksOpen}
+        style={{
+          background:
+            tasksHover() || props.tasksOpen
+              ? theme().borderStrong
+              : "transparent",
+          border: `1px solid ${theme().border}`,
+          padding: "4px 8px",
+          color:
+            tasksHover() || props.tasksOpen ? theme().text : theme().textDim,
+          cursor: "pointer",
+          display: "flex",
+          "align-items": "center",
+          gap: "6px",
+          "border-radius": rad(theme(), 6),
+          "font-size": "11px",
+          "font-family": "var(--mono)",
+          transition: "background 90ms, color 90ms",
+        }}
+      >
+        <Icon name="activity" size={12} />
+        <span>{t("tasksLabel")}</span>
+      </button>
       <button
         onClick={props.onToggleSettings}
         onMouseEnter={() => setTweaksHover(true)}

@@ -34,6 +34,23 @@ import {
 import { isMac } from "./platform";
 import "@xterm/xterm/css/xterm.css";
 
+// ANSI palette. Two design notes:
+//
+//   * `bright black` (the slot most CLIs use for dim glyphs — Claude
+//     Code's leading "●", git's secondary path text, fish prompt
+//     accents) routes through `textDim`, not `textMuted`. `textMuted`
+//     is the trailing-off ornamentation token (~2:1 against several
+//     dark panels) and reads as colorless. `textDim` is the
+//     readable-dim token.
+//
+//   * The other `bright*` slots intentionally mirror their base hue.
+//     Earlier I derived them via a luminance shift, but that
+//     interacted poorly with Claude Code's pet, which paints with
+//     bold + bright-white attributes — the shift pushed bright-white
+//     past the theme `text` value and the WebGL color cache rendered
+//     the whole gradient at the same near-fg value (all white on
+//     dark themes, all black on light). Keeping bright == base means
+//     bold/bright sequences render in their hue without distortion.
 function xtermTheme(t: Theme) {
   return {
     background: t.panel,
@@ -46,16 +63,16 @@ function xtermTheme(t: Theme) {
     green: t.green,
     yellow: t.yellow,
     blue: t.blue,
-    magenta: t.accent,
-    cyan: t.pixelBlue,
+    magenta: t.magenta,
+    cyan: t.cyan,
     white: t.text,
-    brightBlack: t.textMuted,
+    brightBlack: t.textDim,
     brightRed: t.red,
     brightGreen: t.green,
     brightYellow: t.amber,
     brightBlue: t.blue,
-    brightMagenta: t.accent,
-    brightCyan: t.pixelBlue,
+    brightMagenta: t.magenta,
+    brightCyan: t.cyan,
     brightWhite: t.text,
   };
 }
@@ -113,6 +130,13 @@ export const XtermPane: Component<{
     cursorBlink: true,
     cursorStyle: "bar",
     allowProposedApi: true,
+    // No `minimumContrastRatio` override: when set, xterm shifts
+    // every low-contrast truecolor pixel toward bg/fg to meet the
+    // threshold. CLIs that paint subtle gradient art (Claude Code's
+    // colored pet, neofetch ASCII, fancy spinners) rely on those
+    // exact RGB values — bumping them collapses the gradient into a
+    // near-monochrome smear. Leaving the ratio at the default (1)
+    // means colors render exactly as the program emits them.
     theme: xtermTheme(themeAccessor()),
   });
   const fit = new FitAddon();
@@ -463,6 +487,10 @@ export const XtermPane: Component<{
       requestAnimationFrame(() => {
         if (disposed) return;
         term.open(container);
+        // WebGL renderer renders truecolor faithfully (the DOM
+        // fallback would force every low-contrast pixel to meet AA,
+        // which mangles gradient ASCII art). Falls back gracefully
+        // to DOM if the GPU context can't be created.
         tryLoadWebgl();
         opened = true;
         resizeObserver = new ResizeObserver(() => doFit());

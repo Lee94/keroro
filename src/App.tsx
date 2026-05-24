@@ -30,6 +30,7 @@ import { useTheme } from "./ui/useTheme";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { isMac } from "./platform";
 import { Titlebar } from "./chrome/Titlebar";
+import { TasksPanel } from "./chrome/TasksPanel";
 import { UpdateBanner } from "./chrome/UpdateBanner";
 import { bootUpdateCheck } from "./update";
 import { Sidebar } from "./workspace/Sidebar";
@@ -114,6 +115,7 @@ const App: Component = () => {
   const [density, setDensity] = createSignal<Density>("cozy");
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
+  const [tasksOpen, setTasksOpen] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal<boolean>(readSidebarOpen());
   const [termFontSize, setTermFontSizeSignal] = createSignal<number>(readTermFontSize());
   const setTermFontSize = (n: number) => {
@@ -807,6 +809,14 @@ const App: Component = () => {
     background: themeAccessor().bg,
     "font-family": "var(--ui)",
     "border-radius": "10px",
+    // Tauri runs us with decorations:false + transparent:true, so
+    // without an explicit edge the window blends into desktops of a
+    // similar tone (white app on white wallpaper, dark app on dark
+    // wallpaper). A 1px themed border traces the rounded rectangle so
+    // the window is always visually delimited; `box-sizing` keeps the
+    // 100vw/100vh content area honest.
+    border: `1px solid ${themeAccessor().border}`,
+    "box-sizing": "border-box",
     overflow: "hidden",
   });
 
@@ -838,6 +848,8 @@ const App: Component = () => {
             sidebarOpen={sidebarOpen()}
             onToggleSidebar={toggleSidebar}
             onAddProject={addWorkspace}
+            onToggleTasks={() => setTasksOpen((o) => !o)}
+            tasksOpen={tasksOpen()}
           />
           <UpdateBanner />
           <div style={{ flex: 1, display: "flex", "min-height": 0 }}>
@@ -944,6 +956,11 @@ const App: Component = () => {
           onClose={() => setPaletteOpen(false)}
           entries={allTabsForPalette}
           onPick={activateTabFromPalette}
+        />
+        <TasksPanel
+          open={tasksOpen()}
+          onClose={() => setTasksOpen(false)}
+          entries={allTabsForPalette}
         />
         <ConfirmDialog
           open={pendingDeleteWs() !== null}

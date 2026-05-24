@@ -2,7 +2,7 @@ import { createContext, type Accessor } from "solid-js";
 import { THEMES, type Theme } from "./themes";
 import type { GitStatus } from "./persistence";
 
-export const ThemeContext = createContext<() => Theme>(() => THEMES.ember);
+export const ThemeContext = createContext<() => Theme>(() => THEMES["anthropic-dark"]);
 
 export const WorkspaceContext = createContext<() => string | undefined>(
   () => undefined,

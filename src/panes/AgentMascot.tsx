@@ -20,6 +20,7 @@ export const AgentMascot: Component<{ kind: AgentKind; size?: number }> = (
         <ClaudeCodeMascot
           size={props.size ?? 14}
           primary={theme().pixelCoral}
+          highlight={theme().amber}
           shadow={theme().bg}
         />
       </Match>

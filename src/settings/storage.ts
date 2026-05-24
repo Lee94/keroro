@@ -99,5 +99,5 @@ export const readThemeName = (): ThemeName => {
     const v = localStorage.getItem(THEME_NAME_KEY);
     if (v && v in THEMES) return v as ThemeName;
   } catch {}
-  return "ember";
+  return "anthropic-dark";
 };

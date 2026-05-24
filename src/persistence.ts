@@ -154,6 +154,20 @@ export const claudeSessionTitle = (
 export const claudeUnlockSession = (sessionId: string): Promise<boolean> =>
   invoke<boolean>("claude_unlock_session", { sessionId });
 
+export interface SessionStat {
+  id: string;
+  pid: number | null;
+  cpuPercent: number;
+  memoryBytes: number;
+  alive: boolean;
+}
+
+export const ptySessionStats = (): Promise<SessionStat[]> =>
+  invoke<SessionStat[]>("pty_session_stats");
+
+export const ptyForceKill = (id: string): Promise<void> =>
+  invoke("pty_force_kill", { id });
+
 // ─── Debounce helper ─────────────────────────────────────────────────
 export function debounce<A extends unknown[]>(
   fn: (...args: A) => void | Promise<void>,

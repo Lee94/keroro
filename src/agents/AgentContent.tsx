@@ -21,7 +21,12 @@ const AgentHeader: Component<{ kind: AgentKind }> = (props) => {
           plan: "Claude Max",
           path: "~/Github/orchid-cli",
           mascot: (
-            <ClaudeCodeMascot size={56} primary={t.pixelCoral} shadow={t.bg} />
+            <ClaudeCodeMascot
+              size={56}
+              primary={t.pixelCoral}
+              highlight={t.amber}
+              shadow={t.bg}
+            />
           ),
         };
       case "codex":

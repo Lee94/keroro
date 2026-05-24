@@ -14,6 +14,8 @@ interface Dict {
   newProjectTooltip: string;
   newProjectLabel: string;
   tweaksLabel: string;
+  tasksLabel: string;
+  tasksTooltip: string;
   // Sidebar
   removeProject: string;
   removeProjectConfirmTitle: string;
@@ -35,10 +37,14 @@ interface Dict {
   // Tweaks panel
   tweaksTitle: string;
   palette: string;
-  themeEmber: string;
-  themeForest: string;
-  themePlum: string;
+  themeAnthropicDark: string;
+  themeAnthropicLight: string;
+  themeOpenAIDark: string;
+  themeOpenAILight: string;
+  themeZedDark: string;
   themeZedLight: string;
+  themeGitHubDark: string;
+  themeGitHubLight: string;
   density: string;
   densityCozy: string;
   densityCompact: string;
@@ -108,6 +114,15 @@ interface Dict {
   commandStatusKilled: string;
   commandExitCodePrefix: string;
   commandNoOutput: string;
+  // Tasks panel
+  tasksTitle: string;
+  tasksEmpty: string;
+  tasksColSession: string;
+  tasksColCpu: string;
+  tasksColMemory: string;
+  tasksExited: string;
+  tasksKill: string;
+  tasksKillTooltip: string;
 }
 
 const en: Dict = {
@@ -116,6 +131,8 @@ const en: Dict = {
   newProjectTooltip: "New project",
   newProjectLabel: "new project",
   tweaksLabel: "tweaks",
+  tasksLabel: "tasks",
+  tasksTooltip: "Running sessions",
   removeProject: "Remove project",
   removeProjectConfirmTitle: "Remove this project?",
   removeProjectConfirmBody:
@@ -134,10 +151,14 @@ const en: Dict = {
   dragTabHint: "or drag a tab here from another pane",
   tweaksTitle: "Tweaks",
   palette: "Palette",
-  themeEmber: "Ember",
-  themeForest: "Forest",
-  themePlum: "Plum",
+  themeAnthropicDark: "Anthropic Dark",
+  themeAnthropicLight: "Anthropic Light",
+  themeOpenAIDark: "OpenAI Dark",
+  themeOpenAILight: "OpenAI Light",
+  themeZedDark: "Zed Dark",
   themeZedLight: "Zed Light",
+  themeGitHubDark: "GitHub Dark",
+  themeGitHubLight: "GitHub Light",
   density: "Density",
   densityCozy: "Cozy",
   densityCompact: "Compact",
@@ -200,6 +221,14 @@ const en: Dict = {
   commandStatusKilled: "Stopped",
   commandExitCodePrefix: "exit",
   commandNoOutput: "(no output yet)",
+  tasksTitle: "Running sessions",
+  tasksEmpty: "No active sessions",
+  tasksColSession: "Session",
+  tasksColCpu: "CPU",
+  tasksColMemory: "Memory",
+  tasksExited: "exited",
+  tasksKill: "Kill",
+  tasksKillTooltip: "Force-kill this session and its child processes",
 };
 
 const zh: Dict = {
@@ -208,6 +237,8 @@ const zh: Dict = {
   newProjectTooltip: "新建项目",
   newProjectLabel: "新建项目",
   tweaksLabel: "设置",
+  tasksLabel: "任务",
+  tasksTooltip: "运行中的会话",
   removeProject: "移除项目",
   removeProjectConfirmTitle: "移除该项目？",
   removeProjectConfirmBody:
@@ -226,10 +257,14 @@ const zh: Dict = {
   dragTabHint: "或从其他面板拖入标签页",
   tweaksTitle: "设置",
   palette: "主题",
-  themeEmber: "余烬",
-  themeForest: "森林",
-  themePlum: "紫梅",
+  themeAnthropicDark: "Anthropic 深色",
+  themeAnthropicLight: "Anthropic 浅色",
+  themeOpenAIDark: "OpenAI 深色",
+  themeOpenAILight: "OpenAI 浅色",
+  themeZedDark: "Zed 深色",
   themeZedLight: "Zed 浅色",
+  themeGitHubDark: "GitHub 深色",
+  themeGitHubLight: "GitHub 浅色",
   density: "密度",
   densityCozy: "宽松",
   densityCompact: "紧凑",
@@ -292,6 +327,14 @@ const zh: Dict = {
   commandStatusKilled: "已停止",
   commandExitCodePrefix: "退出码",
   commandNoOutput: "（暂无输出）",
+  tasksTitle: "运行中的会话",
+  tasksEmpty: "暂无运行中的会话",
+  tasksColSession: "会话",
+  tasksColCpu: "CPU",
+  tasksColMemory: "内存",
+  tasksExited: "已退出",
+  tasksKill: "终止",
+  tasksKillTooltip: "强制终止该会话及其所有子进程",
 };
 
 export type DictKey = keyof Dict;

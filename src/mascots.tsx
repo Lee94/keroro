@@ -89,12 +89,17 @@ const EMBER_ART = `
 export const ClaudeCodeMascot: Component<{
   size?: number;
   primary?: string;
+  /** Flame/highlight pixels on top of the ember. Distinct from `primary`
+   * so the critter reads as three color zones (flame, body, eyes)
+   * instead of a single-tone blob — keeps it visually interesting on
+   * the muted palettes where the body and panel hues sit close. */
+  highlight?: string;
   shadow?: string;
 }> = (props) => (
   <PixelArt
     art={EMBER_ART}
     palette={{
-      A: props.primary ?? "#ff6b4a",
+      A: props.highlight ?? "#ffb86b",
       B: props.primary ?? "#ff6b4a",
       C: props.shadow ?? "#1a0e0a",
     }}

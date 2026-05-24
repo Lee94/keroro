@@ -11,6 +11,9 @@ struct PtySession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
+    // Captured at spawn so the tasks panel can still report the PID after
+    // `child` has been reaped (e.g. shell exited but we haven't called kill yet).
+    root_pid: Option<u32>,
 }
 
 pub struct PtyManager {
@@ -20,6 +23,22 @@ pub struct PtyManager {
 impl PtyManager {
     pub fn new() -> Self {
         Self { inner: Mutex::new(HashMap::new()) }
+    }
+
+    pub fn session_pids(&self) -> Vec<(String, Option<u32>)> {
+        match self.inner.lock() {
+            Ok(map) => map.iter().map(|(id, s)| (id.clone(), s.root_pid)).collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    pub fn kill_session(&self, id: &str) -> Result<(), String> {
+        let mut map = self.inner.lock().map_err(|e| e.to_string())?;
+        if let Some(mut session) = map.remove(id) {
+            let _ = session.child.kill();
+            let _ = session.child.wait();
+        }
+        Ok(())
     }
 }
 
@@ -42,6 +61,13 @@ fn pick_shell(cwd: Option<&str>) -> CommandBuilder {
 fn apply_terminal_env(cmd: &mut CommandBuilder) {
     if std::env::var_os("TERM").is_none() {
         cmd.env("TERM", "xterm-256color");
+    }
+    // Advertise 24-bit color so CLIs that gate truecolor on COLORTERM
+    // (eza, bat, delta, fish prompts, …) emit full RGB escapes instead
+    // of quantizing to the 256-color palette. xterm.js's DOM renderer
+    // already handles 24-bit; this just unlocks the upstream side.
+    if std::env::var_os("COLORTERM").is_none() {
+        cmd.env("COLORTERM", "truecolor");
     }
     #[cfg(not(windows))]
     {
@@ -178,10 +204,11 @@ pub fn pty_spawn(
 
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    let root_pid = child.process_id();
 
     {
         let mut map = state.inner.lock().map_err(|e| e.to_string())?;
-        map.insert(id.clone(), PtySession { writer, master: pair.master, child });
+        map.insert(id.clone(), PtySession { writer, master: pair.master, child, root_pid });
     }
 
     let data_event = format!("pty://data/{}", id);
@@ -237,10 +264,5 @@ pub fn pty_resize(
 
 #[tauri::command]
 pub fn pty_kill(state: State<'_, PtyManager>, id: String) -> Result<(), String> {
-    let mut map = state.inner.lock().map_err(|e| e.to_string())?;
-    if let Some(mut session) = map.remove(&id) {
-        let _ = session.child.kill();
-        let _ = session.child.wait();
-    }
-    Ok(())
+    state.kill_session(&id)
 }

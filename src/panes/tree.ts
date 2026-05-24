@@ -131,7 +131,7 @@ export function mapLeaves(
   return { ...node, first, second };
 }
 
-export function findLeaf(node: PaneNode, id: string): LeafPane | null {
+function findLeaf(node: PaneNode, id: string): LeafPane | null {
   if (node.type === "leaf") return node.id === id ? node : null;
   return findLeaf(node.first, id) ?? findLeaf(node.second, id);
 }
@@ -177,7 +177,7 @@ export function updateLeaf(
   return mapLeaves(root, (leaf) => (leaf.id === leafId ? patch(leaf) : leaf));
 }
 
-export function splitLeafIntoNew(
+function splitLeafIntoNew(
   root: PaneNode,
   targetLeafId: string,
   side: Exclude<DropSide, "center">,

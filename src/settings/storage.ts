@@ -8,12 +8,30 @@ import {
 } from "../themeContext";
 import { detectDefaultLocale, type Locale } from "../i18n";
 
-export const SIDEBAR_OPEN_KEY = "faye:sidebarOpen";
-export const SIDEBAR_EXPANDED_KEY = "faye:sidebarExpanded";
-export const THEME_NAME_KEY = "faye:themeName";
-export const TERM_FONT_SIZE_KEY = "faye:termFontSize";
-export const TERM_FONT_FAMILY_KEY = "faye:termFontFamily";
-export const LOCALE_KEY = "faye:locale";
+const SIDEBAR_OPEN_KEY = "faye:sidebarOpen";
+const SIDEBAR_EXPANDED_KEY = "faye:sidebarExpanded";
+const THEME_NAME_KEY = "faye:themeName";
+const TERM_FONT_SIZE_KEY = "faye:termFontSize";
+const TERM_FONT_FAMILY_KEY = "faye:termFontFamily";
+const LOCALE_KEY = "faye:locale";
+
+// Swallow QuotaExceeded / private-mode / disabled-storage failures: nothing
+// here is load-bearing enough to crash the app for, the next boot just falls
+// back to the defaults.
+const safeWrite = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+};
+
+export const writeThemeName = (n: string): void => safeWrite(THEME_NAME_KEY, n);
+export const writeLocale = (l: string): void => safeWrite(LOCALE_KEY, l);
+export const writeSidebarOpen = (open: boolean): void =>
+  safeWrite(SIDEBAR_OPEN_KEY, open ? "1" : "0");
+export const writeTermFontSize = (n: number): void =>
+  safeWrite(TERM_FONT_SIZE_KEY, String(n));
+export const writeTermFontFamily = (v: string): void =>
+  safeWrite(TERM_FONT_FAMILY_KEY, v);
 
 export const readLocale = (): Locale => {
   try {
@@ -88,11 +106,8 @@ export const readSidebarExpanded = (): Set<string> => {
   return new Set();
 };
 
-export const writeSidebarExpanded = (ids: ReadonlySet<string>): void => {
-  try {
-    localStorage.setItem(SIDEBAR_EXPANDED_KEY, JSON.stringify([...ids]));
-  } catch {}
-};
+export const writeSidebarExpanded = (ids: ReadonlySet<string>): void =>
+  safeWrite(SIDEBAR_EXPANDED_KEY, JSON.stringify([...ids]));
 
 export const readThemeName = (): ThemeName => {
   try {

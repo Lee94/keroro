@@ -1,5 +1,4 @@
 export interface Theme {
-  name: string;
   bg: string;
   chrome: string;
   panel: string;
@@ -45,50 +44,11 @@ export function rad(t: Theme, px: number): string {
   return v === 0 ? "0" : `${v}px`;
 }
 
-// Mix a hex color toward white (amount > 0) or black (amount < 0).
-// Used to derive ANSI "bright" variants from base hues so the terminal
-// gets a real 16-color palette without per-theme hand-tuning.
-export function mixHex(hex: string, amount: number): string {
-  const c = hex.replace(/^#/, "");
-  if (c.length !== 6) return hex;
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  if ([r, g, b].some(Number.isNaN)) return hex;
-  const target = amount >= 0 ? 255 : 0;
-  const a = Math.min(1, Math.abs(amount));
-  const ch = (v: number) =>
-    Math.round(v + (target - v) * a)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${ch(r)}${ch(g)}${ch(b)}`;
-}
-
-// YIQ luminance check — lets the bright-variant helper pick the
-// right direction (lighten on dark themes, deepen on light themes)
-// without each call site needing to know which theme is active.
-export function isLightTheme(t: Theme): boolean {
-  const c = t.bg.replace(/^#/, "");
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  if ([r, g, b].some(Number.isNaN)) return false;
-  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
-}
-
-// Bright = lighter & punchier on dark themes; deeper & more saturated
-// looking on light themes. Single source of truth so every consumer
-// (xterm palette, status chips, etc.) gets the same shift.
-export function brighten(t: Theme, hex: string): string {
-  return mixHex(hex, isLightTheme(t) ? -0.22 : 0.22);
-}
-
 export const THEMES: Record<ThemeName, Theme> = {
   // ─── OpenAI Dark ───────────────────────────────────────────────────
   // Pulled from ChatGPT's app shell: near-black canvas, slightly lighter
   // panels, neutral grays for text, and the iconic emerald accent.
   "openai-dark": {
-    name: "openai-dark",
     bg: "#212121",
     chrome: "#171717",
     panel: "#2f2f2f",
@@ -118,7 +78,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // The white-paper variant from chatgpt.com: pure white canvas, cool
   // grays, the same emerald accent toned down for contrast on white.
   "openai-light": {
-    name: "openai-light",
     bg: "#ffffff",
     chrome: "#f7f7f8",
     panel: "#ffffff",
@@ -149,7 +108,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // cream-tinted text, and the brand "coral" accent (#cc785c) brightened
   // a touch so it still pops on a dark surface.
   "anthropic-dark": {
-    name: "anthropic-dark",
     bg: "#1c1916",
     chrome: "#211e1a",
     panel: "#25221e",
@@ -179,7 +137,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // Claude's signature paper-cream palette: warm ivory background,
   // espresso-toned text, coral accent. Keeps a calm, editorial feel.
   "anthropic-light": {
-    name: "anthropic-light",
     bg: "#f5f4ed",
     chrome: "#ebe9dc",
     panel: "#faf9f5",
@@ -210,7 +167,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // pastel syntax colors, and crisp 0-radius corners that match Zed's
   // signature sharp-edged surfaces.
   "zed-dark": {
-    name: "zed-dark",
     bg: "#1e222a",
     chrome: "#181b21",
     panel: "#21252c",
@@ -240,7 +196,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // One Light palette: bright off-white canvas, warm grays, muted
   // indigo accent. Sharp corners stay true to Zed's chrome.
   "zed-light": {
-    name: "zed-light",
     bg: "#fafafa",
     chrome: "#ececec",
     panel: "#ffffff",
@@ -271,7 +226,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // (#0d1117), slightly lighter panel (#161b22), and the unmistakable
   // accent blue (#2f81f7) used for links and primary buttons.
   "github-dark": {
-    name: "github-dark",
     bg: "#0d1117",
     chrome: "#010409",
     panel: "#161b22",
@@ -301,7 +255,6 @@ export const THEMES: Record<ThemeName, Theme> = {
   // GitHub "Light default": pure white canvas with the #f6f8fa subtle
   // gray for chrome/insets and the iconic GitHub blue (#0969da).
   "github-light": {
-    name: "github-light",
     bg: "#ffffff",
     chrome: "#f6f8fa",
     panel: "#ffffff",

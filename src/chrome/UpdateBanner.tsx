@@ -109,7 +109,7 @@ export const UpdateBanner: Component = () => {
         <Show when={updateStatus() === "available"}>
           <button
             onClick={() => void installPendingUpdate()}
-            style={buttonStyle("primary")}
+            style={buttonStyle()}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
@@ -134,7 +134,7 @@ export const UpdateBanner: Component = () => {
   );
 };
 
-function buttonStyle(_kind: "primary"): Record<string, string> {
+function buttonStyle(): Record<string, string> {
   const theme = useTheme();
   return {
     background: theme().accent,

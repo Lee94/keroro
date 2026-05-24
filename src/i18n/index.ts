@@ -345,8 +345,6 @@ const defaultLocale: Accessor<Locale> = () => "en";
 
 export const LocaleContext = createContext<Accessor<Locale>>(defaultLocale);
 
-export const useLocale = (): Accessor<Locale> => useContext(LocaleContext);
-
 export const useT = () => {
   const locale = useContext(LocaleContext);
   return (key: DictKey): string => dicts[locale()][key];

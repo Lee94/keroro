@@ -1,4 +1,4 @@
-import { createSignal, Show, type Component } from "solid-js";
+import { createSignal, Show, type Component, type JSX } from "solid-js";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { useT } from "../i18n";
@@ -220,7 +220,7 @@ export const CommandEditorModal: Component<{
   );
 };
 
-const Field: Component<{ label: string; children: any }> = (props) => {
+const Field: Component<{ label: string; children: JSX.Element }> = (props) => {
   const theme = useTheme();
   return (
     <label style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>

@@ -376,14 +376,6 @@ export const XtermPane: Component<{
       }
       setNeedsAttention(props.sessionId, detectAttention(lines));
       if (tailLooksLikeSessionInUse()) {
-        console.debug(
-          "[XtermPane]",
-          props.sessionId,
-          "saw 'Session ID … already in use' in live buffer; rotating=",
-          rotating,
-          "throttled=",
-          Date.now() - lastRotationAt < ROTATION_THROTTLE_MS,
-        );
         rotateAndRespawn();
       }
     }, 250);

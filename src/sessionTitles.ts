@@ -17,14 +17,6 @@ export const setSessionTitle = (cliSessionId: string, title: string): void => {
   });
 };
 
-export const clearSessionTitle = (cliSessionId: string): void => {
-  setTitles((prev) => {
-    if (!(cliSessionId in prev)) return prev;
-    const { [cliSessionId]: _, ...rest } = prev;
-    return rest;
-  });
-};
-
 // The literal `title` that [[PaneView.handleAdd]] assigns to a brand-new tab
 // of `kind`. A tab whose title still equals this is treated as never-renamed
 // and is eligible for auto-title display.

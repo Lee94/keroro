@@ -13,7 +13,7 @@ export const CLI_REGISTRY = [
   binary: string;
 }[];
 
-export const CLI_KINDS: ReadonlySet<AgentKind> = new Set(
+const CLI_KINDS: ReadonlySet<AgentKind> = new Set(
   CLI_REGISTRY.map((c) => c.kind),
 );
 

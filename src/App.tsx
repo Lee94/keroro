@@ -70,11 +70,6 @@ import {
 import { TweaksPanel } from "./settings/TweaksPanel";
 import { CommandPalette, type PaletteEntry } from "./CommandPalette";
 import {
-  LOCALE_KEY,
-  SIDEBAR_OPEN_KEY,
-  TERM_FONT_FAMILY_KEY,
-  TERM_FONT_SIZE_KEY,
-  THEME_NAME_KEY,
   clampFontSize,
   detectInstalledFont,
   readLocale,
@@ -83,7 +78,12 @@ import {
   readTermFontFamily,
   readTermFontSize,
   readThemeName,
+  writeLocale,
   writeSidebarExpanded,
+  writeSidebarOpen,
+  writeTermFontFamily,
+  writeTermFontSize,
+  writeThemeName,
 } from "./settings/storage";
 import {
   debounce,
@@ -108,9 +108,7 @@ const App: Component = () => {
   const [themeName, setThemeNameSignal] = createSignal<ThemeName>(readThemeName());
   const setThemeName = (n: ThemeName) => {
     setThemeNameSignal(n);
-    try {
-      localStorage.setItem(THEME_NAME_KEY, n);
-    } catch {}
+    writeThemeName(n);
   };
   const [density, setDensity] = createSignal<Density>("cozy");
   const [settingsOpen, setSettingsOpen] = createSignal(false);
@@ -121,9 +119,7 @@ const App: Component = () => {
   const setTermFontSize = (n: number) => {
     const next = clampFontSize(n);
     setTermFontSizeSignal(next);
-    try {
-      localStorage.setItem(TERM_FONT_SIZE_KEY, String(next));
-    } catch {}
+    writeTermFontSize(next);
   };
   const bumpTermFontSize = (delta: number) =>
     setTermFontSize(termFontSize() + delta);
@@ -135,9 +131,7 @@ const App: Component = () => {
   const setTermFontFamily = (v: string) => {
     if (!TERMINAL_FONT_FAMILIES.some((f) => f.value === v)) return;
     setTermFontFamilySignal(v);
-    try {
-      localStorage.setItem(TERM_FONT_FAMILY_KEY, v);
-    } catch {}
+    writeTermFontFamily(v);
   };
   const [installedFonts, setInstalledFonts] = createSignal<Set<string>>(
     new Set(),
@@ -145,17 +139,13 @@ const App: Component = () => {
   const [locale, setLocaleSignal] = createSignal<Locale>(readLocale());
   const setLocale = (l: Locale) => {
     setLocaleSignal(l);
-    try {
-      localStorage.setItem(LOCALE_KEY, l);
-    } catch {}
+    writeLocale(l);
   };
 
   const toggleSidebar = () => {
     setSidebarOpen((o) => {
       const next = !o;
-      try {
-        localStorage.setItem(SIDEBAR_OPEN_KEY, next ? "1" : "0");
-      } catch {}
+      writeSidebarOpen(next);
       return next;
     });
   };

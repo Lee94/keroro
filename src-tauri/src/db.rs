@@ -58,9 +58,9 @@ pub fn open(app: &AppHandle) -> Result<Db, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("create app data dir: {e}"))?;
     let path = dir.join("keroro.db");
     let conn = Connection::open(&path).map_err(|e| format!("open sqlite: {e}"))?;
-    conn.pragma_update(None, "journal_mode", &"WAL")
+    conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| format!("set WAL: {e}"))?;
-    conn.pragma_update(None, "foreign_keys", &"ON")
+    conn.pragma_update(None, "foreign_keys", "ON")
         .map_err(|e| format!("set foreign_keys: {e}"))?;
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("apply schema: {e}"))?;
@@ -165,8 +165,7 @@ pub fn projects_replace(db: State<'_, Db>, projects: Vec<ProjectRow>) -> Result<
         if ids.is_empty() {
             tx.execute("DELETE FROM projects", []).map_err(|e| e.to_string())?;
         } else {
-            let placeholders = std::iter::repeat("?")
-                .take(ids.len())
+            let placeholders = std::iter::repeat_n("?", ids.len())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!("DELETE FROM projects WHERE id NOT IN ({placeholders})");
@@ -249,8 +248,7 @@ pub fn sessions_replace(
             )
             .map_err(|e| e.to_string())?;
         } else {
-            let placeholders = std::iter::repeat("?")
-                .take(ids.len())
+            let placeholders = std::iter::repeat_n("?", ids.len())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(
@@ -387,8 +385,7 @@ pub fn project_commands_replace(
             )
             .map_err(|e| e.to_string())?;
         } else {
-            let placeholders = std::iter::repeat("?")
-                .take(ids.len())
+            let placeholders = std::iter::repeat_n("?", ids.len())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(

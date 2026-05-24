@@ -678,8 +678,6 @@ export const Sidebar: Component<{
   const [outputCommand, setOutputCommand] = createSignal<ProjectCommandRow | null>(null);
   const [outputCwd, setOutputCwd] = createSignal<string>("");
 
-  const attnTabs = needsAttentionTabs;
-
   const tabsByWs = createMemo(() => {
     const out: Record<string, PaletteEntry[]> = {};
     for (const entry of props.tabEntries()) {
@@ -810,7 +808,7 @@ export const Sidebar: Component<{
                   active={props.active === ws.id}
                   expanded={props.expanded.has(ws.id)}
                   hasAttention={props.attentionWorkspaces.has(ws.id)}
-                  attentionTabs={attnTabs()}
+                  attentionTabs={needsAttentionTabs()}
                   activeWsId={props.active}
                   activeTabIds={props.activeTabIds}
                   tabs={tabsByWs()[ws.id] ?? []}

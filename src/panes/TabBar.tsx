@@ -201,7 +201,6 @@ const AddMenu: Component<{
   open: boolean;
   onPick: (kind: AgentKind) => void;
   onClose: () => void;
-  anchorBelow?: boolean;
 }> = (props) => {
   const theme = useTheme();
   const t = useT();
@@ -212,7 +211,6 @@ const AddMenu: Component<{
       ({ kind, label }) => ({ kind, label }),
     ),
   ];
-  const below = () => props.anchorBelow ?? true;
   return (
     <Show when={props.open}>
       <div
@@ -222,8 +220,7 @@ const AddMenu: Component<{
       <div
         style={{
           position: "absolute",
-          top: below() ? "calc(100% + 4px)" : "auto",
-          bottom: below() ? "auto" : "calc(100% + 4px)",
+          top: "calc(100% + 4px)",
           left: 0,
           "min-width": "200px",
           "z-index": 101,
@@ -237,17 +234,14 @@ const AddMenu: Component<{
         <div
           style={{
             position: "absolute",
-            top: below() ? "-5px" : "auto",
-            bottom: below() ? "auto" : "-5px",
+            top: "-5px",
             left: "16px",
             width: "8px",
             height: "8px",
             transform: "rotate(45deg)",
             background: theme().panelAlt,
-            "border-top": below() ? `1px solid ${theme().borderStrong}` : "none",
-            "border-left": below() ? `1px solid ${theme().borderStrong}` : "none",
-            "border-bottom": below() ? "none" : `1px solid ${theme().borderStrong}`,
-            "border-right": below() ? "none" : `1px solid ${theme().borderStrong}`,
+            "border-top": `1px solid ${theme().borderStrong}`,
+            "border-left": `1px solid ${theme().borderStrong}`,
           }}
         />
         <For each={items()}>
@@ -293,7 +287,6 @@ export const TabBar: Component<{
   onClose: (id: string) => void;
   onAdd: (kind: AgentKind) => void;
   onRename: (id: string, title: string) => void;
-  addAnchorBelow?: boolean;
 }> = (props) => {
   const theme = useTheme();
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -348,7 +341,6 @@ export const TabBar: Component<{
           open={menuOpen()}
           onPick={props.onAdd}
           onClose={() => setMenuOpen(false)}
-          anchorBelow={props.addAnchorBelow}
         />
       </div>
       <div style={{ flex: 1 }} />

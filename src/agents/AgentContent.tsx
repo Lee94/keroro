@@ -9,7 +9,7 @@ import {
 import type { AgentKind, ChatAgentKind } from "../panes/types";
 
 const AgentHeader: Component<{ kind: AgentKind }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const info = () => {
     const t = theme();
     switch (props.kind) {
@@ -80,7 +80,7 @@ const AgentHeader: Component<{ kind: AgentKind }> = (props) => {
 };
 
 const ClaudeChat: Component = () => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div
       style={{
@@ -216,7 +216,7 @@ const ClaudeChat: Component = () => {
 };
 
 const CodexChat: Component = () => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div
       style={{
@@ -313,7 +313,7 @@ const CodexChat: Component = () => {
 };
 
 export const AgentContent: Component<{ kind: ChatAgentKind }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div style={{ flex: 1, overflow: "auto", background: theme().panel }}>
       <AgentHeader kind={props.kind} />

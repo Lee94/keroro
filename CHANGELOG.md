@@ -4,6 +4,60 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-05-24
+
+### Added
+
+- **Sidebar terminal close button** — hover a terminal row to reveal an `×`
+  affordance; previously the only way to close a session was from the in-pane
+  tab strip.
+- **Confirm dialog before project removal** — clicking the trash icon on a
+  workspace now opens a danger-styled confirm with the project name; closes
+  the loss-of-work hole on a misclick. The on-disk folder is still left
+  untouched.
+- **"+ new project" lives in the toolbar** — moved out of the sidebar header
+  and the product mascot/wordmark were removed for a cleaner chrome.
+
+### Fixed
+
+- **Packaged app: terminal can't delete CJK / emoji** — Finder-launched .apps
+  inherit launchd's stripped env, so `TERM`/`LANG` were absent and the shell
+  processed input byte-by-byte. The PTY now injects `TERM=xterm-256color` and
+  a UTF-8 locale when missing. Same root cause fixed for piped command runs
+  (`exec.rs`) using `TERM=dumb` + `NO_COLOR=1` instead, since their output
+  goes to a `<pre>` viewer.
+- **Command output modal: garbled ANSI escapes** — pnpm/vite and friends were
+  emitting color sequences (`[32m…`) into the modal. Output is now ANSI-stripped
+  before display and color is suppressed at spawn time.
+- **Command "Stop" didn't actually stop dev servers** — `child.kill()` was
+  only killing the wrapping `zsh -l -c`; `pnpm dev` and its node grandchildren
+  got reparented to launchd and kept running. The shell is now spawned in its
+  own process group and `killpg(SIGTERM)` → `SIGKILL` takes down the whole
+  tree.
+- **`detect_node_version` failed in packaged builds** — `Command::new("node")`
+  relies on PATH lookup, which is empty under launchd. Routed through
+  `find_cli` so Homebrew / `~/.local/bin` paths are probed.
+- **IME composition doubled letters on switch** — toggling Chinese ↔ English
+  mid-composition leaked the pinyin letters through after `compositionend`
+  already committed them ("ab" became "abab"). xterm key handler now drops
+  `isComposing` / keyCode 229 events.
+- **Sidebar terminal title diverged from tab title** — the sidebar read
+  `tab.title` directly while the tab bar uses `displayTabTitle()` (which
+  falls back to the auto-derived claude session title). Sidebar now uses the
+  same helper.
+
+## [0.4.1] - 2026-05-22
+
+Rich git status in footer (ahead/behind, diff lines, dirty).
+
+## [0.4.0] - 2026-05-22
+
+Terminal search and in-app auto-updater.
+
+## [0.3.0] - 2026-05-22
+
+i18n, attention dots, claude resume rotation, boot/switch performance work.
+
 ## [0.2.2] - 2026-05-21
 
 ### Performance
@@ -77,6 +131,10 @@ Initial release.
 - Per-project persistence of layout, sessions, and active project.
 - CI release workflow producing macOS arm64 and Windows builds.
 
+[0.4.2]: https://github.com/Lee94/keroro/releases/tag/v0.4.2
+[0.4.1]: https://github.com/Lee94/keroro/releases/tag/v0.4.1
+[0.4.0]: https://github.com/Lee94/keroro/releases/tag/v0.4.0
+[0.3.0]: https://github.com/Lee94/keroro/releases/tag/v0.3.0
 [0.2.2]: https://github.com/Lee94/keroro/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Lee94/keroro/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Lee94/keroro/releases/tag/v0.2.0

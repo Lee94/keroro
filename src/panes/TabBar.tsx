@@ -24,7 +24,7 @@ const TabItem: Component<{
   onClose: (() => void) | null;
   onRename: (title: string) => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const { setDrag } = useDrag();
   const [hover, setHover] = createSignal(false);
   const [closeHover, setCloseHover] = createSignal(false);
@@ -203,7 +203,7 @@ const AddMenu: Component<{
   onClose: () => void;
   anchorBelow?: boolean;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const installedClis = useContext(InstalledClisContext);
   const items = (): { kind: AgentKind; label: string }[] => [
@@ -269,7 +269,7 @@ const AddMenu: Component<{
                 "letter-spacing": "-0.01em",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = theme().panel)
+                (e.currentTarget.style.background = theme().borderStrong)
               }
               onMouseLeave={(e) =>
                 (e.currentTarget.style.background = "transparent")
@@ -295,7 +295,7 @@ export const TabBar: Component<{
   onRename: (id: string, title: string) => void;
   addAnchorBelow?: boolean;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [addHover, setAddHover] = createSignal(false);
   return (

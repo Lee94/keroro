@@ -23,7 +23,7 @@ const RadioRow: Component<{
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div style={{ "margin-bottom": "12px" }}>
       <div
@@ -75,7 +75,7 @@ const TerminalFontFamilyRow: Component<{
   setValue: (v: string) => void;
   installed: Set<string>;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const selected = () => findTerminalFontFamily(props.value);
   const isAvailable = (value: string, primary: string | null) =>
@@ -133,7 +133,7 @@ const TerminalFontSizeRow: Component<{
   setValue: (n: number) => void;
   reset: () => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const atMin = () => props.value <= TERMINAL_FONT_SIZE_MIN;
   const atMax = () => props.value >= TERMINAL_FONT_SIZE_MAX;
@@ -220,11 +220,17 @@ export const TweaksPanel: Component<{
   locale: Locale;
   setLocale: (l: Locale) => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const [closeHover, setCloseHover] = createSignal(false);
   return (
     <Show when={props.open}>
+      {/* Backdrop: click anywhere outside the panel to dismiss. Sits just
+       * below the panel so clicks on the panel itself never reach it. */}
+      <div
+        onClick={props.onClose}
+        style={{ position: "fixed", inset: 0, "z-index": 199 }}
+      />
       <div
         style={{
           position: "fixed",
@@ -314,7 +320,7 @@ export const TweaksPanel: Component<{
 };
 
 const UpdateRow: Component = () => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const checking = () => updateStatus() === "checking";
 

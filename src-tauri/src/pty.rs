@@ -26,8 +26,35 @@ impl PtyManager {
 fn pick_shell(cwd: Option<&str>) -> CommandBuilder {
     let program = pick_program();
     let mut cmd = CommandBuilder::new(program);
+    // Login shell so .zprofile/.profile load — otherwise a .app launched from
+    // Finder inherits launchd's stripped PATH and tools like pnpm/brew are missing.
+    #[cfg(not(windows))]
+    cmd.arg("-l");
     apply_cwd(&mut cmd, cwd);
+    apply_terminal_env(&mut cmd);
     cmd
+}
+
+// Finder-launched .apps inherit launchd's stripped env, which often omits
+// TERM and LANG. Without TERM, readline can't talk back to the terminal and
+// line editing breaks; without a UTF-8 LANG, the shell processes input
+// byte-by-byte and CJK / emoji can't be deleted with a single backspace.
+fn apply_terminal_env(cmd: &mut CommandBuilder) {
+    if std::env::var_os("TERM").is_none() {
+        cmd.env("TERM", "xterm-256color");
+    }
+    #[cfg(not(windows))]
+    {
+        let has_utf8_locale = ["LC_ALL", "LC_CTYPE", "LANG"].iter().any(|k| {
+            std::env::var(k)
+                .map(|v| v.to_ascii_uppercase().contains("UTF-8") || v.to_ascii_uppercase().contains("UTF8"))
+                .unwrap_or(false)
+        });
+        if !has_utf8_locale {
+            cmd.env("LANG", "en_US.UTF-8");
+            cmd.env("LC_CTYPE", "en_US.UTF-8");
+        }
+    }
 }
 
 fn apply_cwd(cmd: &mut CommandBuilder, cwd: Option<&str>) {
@@ -77,6 +104,7 @@ fn run_command(command: &str, args: &[String], cwd: Option<&str>) -> CommandBuil
         cmd.arg("-c");
         cmd.arg(shell_cmd);
         apply_cwd(&mut cmd, cwd);
+        apply_terminal_env(&mut cmd);
         cmd
     }
     #[cfg(windows)]
@@ -86,6 +114,7 @@ fn run_command(command: &str, args: &[String], cwd: Option<&str>) -> CommandBuil
             cmd.arg(a);
         }
         apply_cwd(&mut cmd, cwd);
+        apply_terminal_env(&mut cmd);
         cmd
     }
 }

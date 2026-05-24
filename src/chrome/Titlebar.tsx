@@ -53,7 +53,7 @@ const WindowsCaptionButton: Component<{
   kind: "min" | "max" | "close";
   onClick: () => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const [hover, setHover] = createSignal(false);
   const isClose = props.kind === "close";
   const hoverBg = () => (isClose ? "#c42b1c" : "rgba(255,255,255,0.06)");
@@ -142,7 +142,7 @@ export const Titlebar: Component<{
   onToggleSidebar: () => void;
   onAddProject: () => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const [sidebarHover, setSidebarHover] = createSignal(false);
   const [addProjectHover, setAddProjectHover] = createSignal(false);

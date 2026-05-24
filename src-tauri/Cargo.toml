@@ -1,6 +1,6 @@
 [package]
 name = "keroro"
-version = "0.4.1"
+version = "0.4.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -29,4 +29,7 @@ portable-pty = "0.8"
 base64 = "0.22"
 which = "7"
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 

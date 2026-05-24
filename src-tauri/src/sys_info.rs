@@ -81,7 +81,9 @@ pub fn detect_clis() -> Vec<CliInfo> {
 
 #[tauri::command]
 pub fn detect_node_version(cwd: Option<String>) -> Option<String> {
-    let program = if cfg!(windows) { "node.exe" } else { "node" };
+    // Finder-launched .apps have a stripped PATH that misses Homebrew/nvm
+    // bin dirs, so resolve via find_cli rather than relying on PATH lookup.
+    let program = find_cli(if cfg!(windows) { "node.exe" } else { "node" })?;
     let mut cmd = Command::new(program);
     if let Some(dir) = cwd.as_deref() {
         cmd.current_dir(dir);

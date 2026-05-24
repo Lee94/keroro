@@ -14,7 +14,7 @@ import {
 } from "../terminalSearch";
 
 export const TerminalSearchBar: Component<{ sessionId: string }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const entry = () => useTerminalSearch(props.sessionId);
   let inputRef!: HTMLInputElement;
@@ -166,7 +166,7 @@ const SearchButton: Component<{
   onClick: () => void;
   children: JSX.Element;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <button
       type="button"

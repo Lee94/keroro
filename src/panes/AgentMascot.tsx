@@ -10,7 +10,7 @@ import type { AgentKind } from "./types";
 export const AgentMascot: Component<{ kind: AgentKind; size?: number }> = (
   props,
 ) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <Switch>
       <Match when={props.kind === "terminal"}>

@@ -22,11 +22,12 @@ import {
   TERMINAL_FONT_SIZE_DEFAULT,
   type WorkspaceInfo,
 } from "./themeContext";
-import { LocaleContext, type Locale } from "./i18n";
+import { LocaleContext, translate, type Locale } from "./i18n";
 import { needsAttentionTabs } from "./panes/attention";
 import { FayeMascot } from "./mascots";
 import { XtermPane } from "./XtermPane";
 import { useTheme } from "./ui/useTheme";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { isMac } from "./platform";
 import { Titlebar } from "./chrome/Titlebar";
 import { UpdateBanner } from "./chrome/UpdateBanner";
@@ -66,6 +67,7 @@ import {
   type Tab,
 } from "./panes/types";
 import { TweaksPanel } from "./settings/TweaksPanel";
+import { CommandPalette, type PaletteEntry } from "./CommandPalette";
 import {
   LOCALE_KEY,
   SIDEBAR_OPEN_KEY,
@@ -75,10 +77,12 @@ import {
   clampFontSize,
   detectInstalledFont,
   readLocale,
+  readSidebarExpanded,
   readSidebarOpen,
   readTermFontFamily,
   readTermFontSize,
   readThemeName,
+  writeSidebarExpanded,
 } from "./settings/storage";
 import {
   debounce,
@@ -87,12 +91,16 @@ import {
   detectGitStatus,
   detectNodeVersion,
   getActiveProject,
+  listCommands,
   listProjects,
+  replaceCommands,
   replaceProjects,
   setActiveProject as dbSetActiveProject,
   upsertProject,
   type GitStatus,
+  type ProjectCommandRow,
 } from "./persistence";
+import { startCommandRunListener } from "./workspace/commandRuns";
 import "./App.css";
 
 const App: Component = () => {
@@ -105,6 +113,7 @@ const App: Component = () => {
   };
   const [density, setDensity] = createSignal<Density>("cozy");
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal<boolean>(readSidebarOpen());
   const [termFontSize, setTermFontSizeSignal] = createSignal<number>(readTermFontSize());
   const setTermFontSize = (n: number) => {
@@ -162,9 +171,24 @@ const App: Component = () => {
   const [workspaces, setWorkspaces] = createSignal<Workspace[]>([]);
   const [activeWs, setActiveWs] = createSignal<string>("");
   const [panes, setPanes] = createSignal<PanesByWs>({});
+  const [commandsByWs, setCommandsByWs] = createSignal<
+    Record<string, ProjectCommandRow[]>
+  >({});
+  const [expandedProjects, setExpandedProjectsSignal] = createSignal<
+    ReadonlySet<string>
+  >(readSidebarExpanded());
+  const setExpandedProjects = (next: ReadonlySet<string>) => {
+    setExpandedProjectsSignal(next);
+    writeSidebarExpanded(next);
+  };
   const [bootstrapped, setBootstrapped] = createSignal(false);
   const [installedClis, setInstalledClis] = createSignal<Map<string, string>>(
     new Map(),
+  );
+  // Pending project deletion — surfaces the confirm dialog. Holds the
+  // workspace pending removal so the dialog can show its name in the body.
+  const [pendingDeleteWs, setPendingDeleteWs] = createSignal<Workspace | null>(
+    null,
   );
 
   onMount(async () => {
@@ -177,16 +201,37 @@ const App: Component = () => {
           async (p) => [p.id, await loadPaneTree(p.id)] as const,
         ),
       );
+      const commandEntries = await Promise.all(
+        projectsList.map(
+          async (p) =>
+            [p.id, await listCommands(p.id).catch(() => [])] as const,
+        ),
+      );
       const panesMap: PanesByWs = {};
       for (const [id, wp] of entries) panesMap[id] = wp;
+      const commandsMap: Record<string, ProjectCommandRow[]> = {};
+      for (const [id, cmds] of commandEntries) commandsMap[id] = cmds;
       setWorkspaces(projectsList);
       setPanes(panesMap);
-      setActiveWs(activeId ?? projectsList[0]?.id ?? "");
+      setCommandsByWs(commandsMap);
+      const initialActive = activeId ?? projectsList[0]?.id ?? "";
+      setActiveWs(initialActive);
+      // Auto-expand the active project on first boot if the user has no
+      // saved expand state. Once they explicitly collapse it, we respect that.
+      if (initialActive && expandedProjects().size === 0) {
+        setExpandedProjects(new Set([initialActive]));
+      }
     } catch (err) {
       console.error("bootstrap failed", err);
     } finally {
       setBootstrapped(true);
     }
+  });
+
+  onMount(() => {
+    // Subscribe to background command status events from exec.rs so status
+    // dots in the sidebar update without any per-component listeners.
+    void startCommandRunListener();
   });
 
   onMount(() => {
@@ -196,6 +241,15 @@ const App: Component = () => {
       if (!e.shiftKey && e.key.toLowerCase() === "b") {
         e.preventDefault();
         toggleSidebar();
+        return;
+      }
+      // Quick-open palette — Cmd+P on macOS, Ctrl+P elsewhere. Suppress the
+      // OS print dialog that this combo opens by default in WKWebView /
+      // WebView2 / WebKitGTK.
+      if (!e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        e.stopPropagation();
+        setPaletteOpen((o) => !o);
         return;
       }
       // Terminal font size: Cmd/Ctrl + = / +  to grow, - to shrink, 0 to reset.
@@ -318,6 +372,36 @@ const App: Component = () => {
     }
   }, 200);
 
+  // Commands persistence. Same pattern as layouts: hash the list per ws and
+  // skip when unchanged so unrelated effects (e.g. rerendering on theme
+  // switch) don't trigger redundant writes.
+  const lastSavedCommands = new Map<string, string>();
+  const commandsFingerprint = (list: ProjectCommandRow[]): string =>
+    JSON.stringify(
+      list.map((c, i) => ({
+        id: c.id,
+        title: c.title ?? null,
+        command: c.command,
+        position: i,
+      })),
+    );
+  const debouncedSaveCommands = debounce(
+    (cmds: Record<string, ProjectCommandRow[]>, ids: Set<string>) => {
+      for (const id of Object.keys(cmds)) {
+        if (!ids.has(id)) continue;
+        const list = cmds[id] ?? [];
+        const fp = commandsFingerprint(list);
+        if (lastSavedCommands.get(id) === fp) continue;
+        lastSavedCommands.set(id, fp);
+        replaceCommands(
+          id,
+          list.map((c, i) => ({ ...c, position: i })),
+        ).catch((e) => console.error("replaceCommands failed", e));
+      }
+    },
+    200,
+  );
+
   createEffect(() => {
     if (!bootstrapped()) return;
     const list = workspaces();
@@ -346,6 +430,13 @@ const App: Component = () => {
     const p = panes();
     const ids = new Set(workspaces().map((w) => w.id));
     debouncedSaveLayouts(p, ids);
+  });
+
+  createEffect(() => {
+    if (!bootstrapped()) return;
+    const c = commandsByWs();
+    const ids = new Set(workspaces().map((w) => w.id));
+    debouncedSaveCommands(c, ids);
   });
 
   const addWorkspace = async () => {
@@ -387,7 +478,9 @@ const App: Component = () => {
     setActiveWs(ws.id);
   };
 
-  const removeWorkspace = (id: string) => {
+  // Actually remove the workspace + its panes/commands. Called only after the
+  // user confirms the dialog opened by `requestRemoveWorkspace`.
+  const commitRemoveWorkspace = (id: string) => {
     const list = workspaces();
     if (!list.some((w) => w.id === id)) return;
     const filtered = list.filter((w) => w.id !== id);
@@ -401,6 +494,28 @@ const App: Component = () => {
       delete next[id];
       return next;
     });
+    setCommandsByWs((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (expandedProjects().has(id)) {
+      const next = new Set(expandedProjects());
+      next.delete(id);
+      setExpandedProjects(next);
+    }
+    lastSavedCommands.delete(id);
+  };
+
+  const requestRemoveWorkspace = (id: string) => {
+    const ws = workspaces().find((w) => w.id === id);
+    if (!ws) return;
+    setPendingDeleteWs(ws);
+  };
+
+  const setCommandsForWs = (wsId: string, list: ProjectCommandRow[]) => {
+    setCommandsByWs((prev) => ({ ...prev, [wsId]: list }));
   };
 
   const currentPath = (): string | undefined =>
@@ -439,6 +554,39 @@ const App: Component = () => {
     }
     return out;
   });
+
+  // Flat enumeration of every tab across every workspace, carrying enough
+  // location metadata (leaf id + workspace id/name) for the command palette
+  // to route a selection back to the right leaf. Kept separate from
+  // `allPtyTabs` because that memo is intentionally cached per-tab to avoid
+  // PTY teardown — we don't want to perturb its identity model.
+  const allTabsForPalette = createMemo<PaletteEntry[]>(() => {
+    const wsById = new Map(workspaces().map((w) => [w.id, w]));
+    const out: PaletteEntry[] = [];
+    for (const [wsId, wp] of Object.entries(panes())) {
+      const ws = wsById.get(wsId);
+      if (!ws) continue;
+      walkLeaves(wp.root, (leaf) => {
+        for (const tab of leaf.tabs) {
+          out.push({
+            tab,
+            leafId: leaf.id,
+            workspaceId: wsId,
+            workspaceName: ws.name,
+          });
+        }
+      });
+    }
+    return out;
+  });
+
+  const activateTabFromPalette = (entry: PaletteEntry) => {
+    if (activeWs() !== entry.workspaceId) setActiveWs(entry.workspaceId);
+    setLeafForWs(entry.workspaceId, entry.leafId, (leaf) => ({
+      ...leaf,
+      activeTab: entry.tab.id,
+    }));
+  };
 
   // Owning-workspace cwd per tab. XtermPane needs this independently of
   // the active workspace because polling work (auto-title, future probes)
@@ -697,10 +845,20 @@ const App: Component = () => {
               workspaces={workspaces()}
               active={activeWs()}
               setActive={setActiveWs}
-              onDelete={removeWorkspace}
+              onDelete={requestRemoveWorkspace}
               density={density()}
               open={sidebarOpen()}
               attentionWorkspaces={attentionWorkspaces()}
+              tabEntries={allTabsForPalette}
+              activeTabIds={activeTabIds()}
+              onActivateTab={activateTabFromPalette}
+              onCloseTab={(entry) =>
+                handleCloseTabForWs(entry.workspaceId, entry.leafId, entry.tab.id)
+              }
+              commandsByWs={commandsByWs()}
+              setCommandsForWs={setCommandsForWs}
+              expanded={expandedProjects()}
+              setExpanded={setExpandedProjects}
             />
 
             <Show
@@ -781,6 +939,29 @@ const App: Component = () => {
         </div>
         </Show>
 
+        <CommandPalette
+          open={paletteOpen()}
+          onClose={() => setPaletteOpen(false)}
+          entries={allTabsForPalette}
+          onPick={activateTabFromPalette}
+        />
+        <ConfirmDialog
+          open={pendingDeleteWs() !== null}
+          title={translate(locale(), "removeProjectConfirmTitle")}
+          body={translate(locale(), "removeProjectConfirmBody").replace(
+            "{name}",
+            pendingDeleteWs()?.name ?? "",
+          )}
+          confirmLabel={translate(locale(), "confirmDelete")}
+          cancelLabel={translate(locale(), "confirmCancel")}
+          danger
+          onConfirm={() => {
+            const ws = pendingDeleteWs();
+            if (ws) commitRemoveWorkspace(ws.id);
+            setPendingDeleteWs(null);
+          }}
+          onCancel={() => setPendingDeleteWs(null)}
+        />
         <TweaksPanel
           open={settingsOpen()}
           onClose={() => setSettingsOpen(false)}
@@ -810,7 +991,7 @@ const App: Component = () => {
 };
 
 const Splash: Component = () => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div
       style={{

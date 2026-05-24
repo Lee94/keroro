@@ -10,7 +10,7 @@ export interface ChipDef {
 }
 
 const Chip: Component<ChipDef> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div
       style={{
@@ -39,7 +39,7 @@ const Chip: Component<ChipDef> = (props) => {
 };
 
 export const PaneFooter: Component<{ chips: ChipDef[] }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   return (
     <div
       style={{

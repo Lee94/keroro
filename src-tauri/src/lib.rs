@@ -1,5 +1,6 @@
 mod claude;
 mod db;
+mod exec;
 mod pty;
 mod sys_info;
 
@@ -13,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(pty::PtyManager::new())
+        .manage(exec::ExecManager::new())
         .setup(|app| {
             let database =
                 db::open(app.handle()).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
@@ -41,6 +43,11 @@ pub fn run() {
             db::layout_set,
             db::active_project_get,
             db::active_project_set,
+            db::project_commands_list,
+            db::project_commands_replace,
+            exec::command_run,
+            exec::command_kill,
+            exec::command_output,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

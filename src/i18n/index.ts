@@ -16,6 +16,11 @@ interface Dict {
   tweaksLabel: string;
   // Sidebar
   removeProject: string;
+  removeProjectConfirmTitle: string;
+  removeProjectConfirmBody: string;
+  closeTerminal: string;
+  confirmCancel: string;
+  confirmDelete: string;
   sidebarEmptyTitle: string;
   sidebarEmptyHintPrefix: string;
   sidebarEmptyHintButton: string;
@@ -47,6 +52,10 @@ interface Dict {
   enlargeFontTooltip: string;
   // Tab add menu
   addMenuTerminal: string;
+  // Command palette
+  commandPalettePlaceholder: string;
+  commandPaletteEmpty: string;
+  commandPaletteNoTabs: string;
   // Runtime
   processExited: string;
   spawnFailed: string;
@@ -68,6 +77,37 @@ interface Dict {
   updateChecking: string;
   updateUpToDate: string;
   updateErrorPrefix: string;
+  // Sidebar — collapsible groups
+  sidebarExpandProject: string;
+  sidebarCollapseProject: string;
+  sidebarTerminalsSection: string;
+  sidebarCommandsSection: string;
+  sidebarCommandsEmpty: string;
+  // Project commands
+  commandAddTooltip: string;
+  commandEdit: string;
+  commandDelete: string;
+  commandRun: string;
+  commandRunning: string;
+  commandViewOutput: string;
+  commandStop: string;
+  commandRerun: string;
+  commandOutputTitle: string;
+  commandEditorNew: string;
+  commandEditorEdit: string;
+  commandEditorTitleLabel: string;
+  commandEditorTitlePlaceholder: string;
+  commandEditorShellLabel: string;
+  commandEditorShellPlaceholder: string;
+  commandEditorSave: string;
+  commandEditorCancel: string;
+  commandStatusIdle: string;
+  commandStatusRunning: string;
+  commandStatusSuccess: string;
+  commandStatusFailed: string;
+  commandStatusKilled: string;
+  commandExitCodePrefix: string;
+  commandNoOutput: string;
 }
 
 const en: Dict = {
@@ -77,6 +117,12 @@ const en: Dict = {
   newProjectLabel: "new project",
   tweaksLabel: "tweaks",
   removeProject: "Remove project",
+  removeProjectConfirmTitle: "Remove this project?",
+  removeProjectConfirmBody:
+    "“{name}” will be removed from the sidebar along with its terminals and commands. The folder on disk is left untouched.",
+  closeTerminal: "Close terminal",
+  confirmCancel: "Cancel",
+  confirmDelete: "Remove",
   sidebarEmptyTitle: "No folders yet.",
   sidebarEmptyHintPrefix: "Use ",
   sidebarEmptyHintButton: "+ new project",
@@ -104,6 +150,9 @@ const en: Dict = {
   resetFontTooltip: "Reset (Cmd/Ctrl 0)",
   enlargeFontTooltip: "Enlarge (Cmd/Ctrl =)",
   addMenuTerminal: "Terminal",
+  commandPalettePlaceholder: "Go to tab…",
+  commandPaletteEmpty: "No matching tabs",
+  commandPaletteNoTabs: "No open tabs",
   processExited: "[process exited]",
   spawnFailed: "failed to spawn pty",
   resumeFailedRetrying: "[resume failed — starting a fresh session]",
@@ -122,6 +171,35 @@ const en: Dict = {
   updateChecking: "Checking…",
   updateUpToDate: "You're up to date",
   updateErrorPrefix: "Update check failed:",
+  sidebarExpandProject: "Expand",
+  sidebarCollapseProject: "Collapse",
+  sidebarTerminalsSection: "Terminals",
+  sidebarCommandsSection: "Commands",
+  sidebarCommandsEmpty: "No commands yet",
+  commandAddTooltip: "Add command",
+  commandEdit: "Edit",
+  commandDelete: "Delete command",
+  commandRun: "Run",
+  commandRunning: "Running…",
+  commandViewOutput: "View output",
+  commandStop: "Stop",
+  commandRerun: "Re-run",
+  commandOutputTitle: "Command output",
+  commandEditorNew: "New command",
+  commandEditorEdit: "Edit command",
+  commandEditorTitleLabel: "Label (optional)",
+  commandEditorTitlePlaceholder: "e.g. start dev server",
+  commandEditorShellLabel: "Shell command",
+  commandEditorShellPlaceholder: "e.g. npm run dev",
+  commandEditorSave: "Save",
+  commandEditorCancel: "Cancel",
+  commandStatusIdle: "Idle",
+  commandStatusRunning: "Running",
+  commandStatusSuccess: "Succeeded",
+  commandStatusFailed: "Failed",
+  commandStatusKilled: "Stopped",
+  commandExitCodePrefix: "exit",
+  commandNoOutput: "(no output yet)",
 };
 
 const zh: Dict = {
@@ -129,8 +207,14 @@ const zh: Dict = {
   showSidebar: "显示侧栏",
   newProjectTooltip: "新建项目",
   newProjectLabel: "新建项目",
-  tweaksLabel: "偏好",
+  tweaksLabel: "设置",
   removeProject: "移除项目",
+  removeProjectConfirmTitle: "移除该项目？",
+  removeProjectConfirmBody:
+    "“{name}” 将从侧栏移除，相关终端与命令也会一并清理。本地文件夹不会被删除。",
+  closeTerminal: "关闭终端",
+  confirmCancel: "取消",
+  confirmDelete: "移除",
   sidebarEmptyTitle: "还没有项目。",
   sidebarEmptyHintPrefix: "请点击工具栏中的 ",
   sidebarEmptyHintButton: "+ 新建项目",
@@ -140,7 +224,7 @@ const zh: Dict = {
   openFolder: "打开文件夹",
   newTerminalButton: "新建终端",
   dragTabHint: "或从其他面板拖入标签页",
-  tweaksTitle: "偏好",
+  tweaksTitle: "设置",
   palette: "主题",
   themeEmber: "余烬",
   themeForest: "森林",
@@ -158,6 +242,9 @@ const zh: Dict = {
   resetFontTooltip: "重置 (Cmd/Ctrl 0)",
   enlargeFontTooltip: "放大 (Cmd/Ctrl =)",
   addMenuTerminal: "终端",
+  commandPalettePlaceholder: "跳转到标签页…",
+  commandPaletteEmpty: "没有匹配的标签页",
+  commandPaletteNoTabs: "暂无打开的标签页",
   processExited: "[进程已退出]",
   spawnFailed: "终端启动失败",
   resumeFailedRetrying: "[恢复会话失败，正在创建新会话]",
@@ -176,6 +263,35 @@ const zh: Dict = {
   updateChecking: "检查中…",
   updateUpToDate: "已是最新版本",
   updateErrorPrefix: "检查更新失败：",
+  sidebarExpandProject: "展开",
+  sidebarCollapseProject: "收起",
+  sidebarTerminalsSection: "终端",
+  sidebarCommandsSection: "命令",
+  sidebarCommandsEmpty: "暂无命令",
+  commandAddTooltip: "添加命令",
+  commandEdit: "编辑",
+  commandDelete: "删除命令",
+  commandRun: "运行",
+  commandRunning: "运行中…",
+  commandViewOutput: "查看输出",
+  commandStop: "停止",
+  commandRerun: "重新运行",
+  commandOutputTitle: "命令输出",
+  commandEditorNew: "新建命令",
+  commandEditorEdit: "编辑命令",
+  commandEditorTitleLabel: "名称（可选）",
+  commandEditorTitlePlaceholder: "例如：启动开发服务器",
+  commandEditorShellLabel: "Shell 命令",
+  commandEditorShellPlaceholder: "例如：npm run dev",
+  commandEditorSave: "保存",
+  commandEditorCancel: "取消",
+  commandStatusIdle: "空闲",
+  commandStatusRunning: "运行中",
+  commandStatusSuccess: "成功",
+  commandStatusFailed: "失败",
+  commandStatusKilled: "已停止",
+  commandExitCodePrefix: "退出码",
+  commandNoOutput: "（暂无输出）",
 };
 
 export type DictKey = keyof Dict;

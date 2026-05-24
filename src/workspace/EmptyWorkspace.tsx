@@ -9,7 +9,7 @@ export const EmptyWorkspace: Component<{
   hasWorkspaces: boolean;
   onAdd: () => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   return (
     <div

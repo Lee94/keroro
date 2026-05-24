@@ -9,6 +9,7 @@ import {
 import { detectDefaultLocale, type Locale } from "../i18n";
 
 export const SIDEBAR_OPEN_KEY = "faye:sidebarOpen";
+export const SIDEBAR_EXPANDED_KEY = "faye:sidebarExpanded";
 export const THEME_NAME_KEY = "faye:themeName";
 export const TERM_FONT_SIZE_KEY = "faye:termFontSize";
 export const TERM_FONT_FAMILY_KEY = "faye:termFontFamily";
@@ -73,6 +74,24 @@ export const readSidebarOpen = (): boolean => {
   } catch {
     return true;
   }
+};
+
+export const readSidebarExpanded = (): Set<string> => {
+  try {
+    const v = localStorage.getItem(SIDEBAR_EXPANDED_KEY);
+    if (!v) return new Set();
+    const parsed = JSON.parse(v);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((s): s is string => typeof s === "string"));
+    }
+  } catch {}
+  return new Set();
+};
+
+export const writeSidebarExpanded = (ids: ReadonlySet<string>): void => {
+  try {
+    localStorage.setItem(SIDEBAR_EXPANDED_KEY, JSON.stringify([...ids]));
+  } catch {}
 };
 
 export const readThemeName = (): ThemeName => {

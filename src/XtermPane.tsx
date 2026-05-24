@@ -175,6 +175,15 @@ export const XtermPane: Component<{
   // we naturally search the right session.
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown") return true;
+    // Swallow IME-composing keydowns. Chrome/WebKit stamp every keydown that
+    // happens while a composition is active with `isComposing=true` and
+    // `keyCode=229` ("processed by IME"). xterm.js doesn't filter these
+    // consistently — and when the user toggles IME mid-composition the
+    // pending letters leak through right after `compositionend` already
+    // committed the same characters, doubling the input ("ab" → "abab").
+    // The `compositionend` path is what actually writes to the PTY, so it's
+    // safe to drop these here.
+    if (e.isComposing || e.keyCode === 229) return false;
     const mod = isMac ? e.metaKey : e.ctrlKey;
     if (mod && !e.altKey && (e.key === "f" || e.key === "F")) {
       e.preventDefault();

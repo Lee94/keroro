@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS app_state (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS project_commands (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title       TEXT,
+    command     TEXT NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    updated_at  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_project_commands_project ON project_commands(project_id);
 "#;
 
 pub fn open(app: &AppHandle) -> Result<Db, String> {
@@ -65,6 +76,18 @@ pub struct ProjectRow {
     pub name: String,
     pub path: String,
     pub mascot: String,
+    #[serde(default)]
+    pub position: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProjectCommandRow {
+    pub id: String,
+    #[serde(rename = "projectId")]
+    pub project_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub command: String,
     #[serde(default)]
     pub position: i64,
 }
@@ -314,5 +337,94 @@ pub fn active_project_set(db: State<'_, Db>, id: Option<String>) -> Result<(), S
         params![id],
     )
     .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn project_commands_list(
+    db: State<'_, Db>,
+    project_id: String,
+) -> Result<Vec<ProjectCommandRow>, String> {
+    let conn = lock(&db)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, project_id, title, command, position FROM project_commands
+             WHERE project_id = ?1 ORDER BY position, created_at",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![project_id], |row| {
+            Ok(ProjectCommandRow {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                title: row.get(2)?,
+                command: row.get(3)?,
+                position: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn project_commands_replace(
+    db: State<'_, Db>,
+    project_id: String,
+    commands: Vec<ProjectCommandRow>,
+) -> Result<(), String> {
+    let mut conn = lock(&db)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    {
+        let ids: Vec<String> = commands.iter().map(|c| c.id.clone()).collect();
+        if ids.is_empty() {
+            tx.execute(
+                "DELETE FROM project_commands WHERE project_id = ?1",
+                params![project_id],
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            let placeholders = std::iter::repeat("?")
+                .take(ids.len())
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = format!(
+                "DELETE FROM project_commands WHERE project_id = ? AND id NOT IN ({placeholders})"
+            );
+            let mut bind: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(ids.len() + 1);
+            bind.push(&project_id);
+            for id in &ids {
+                bind.push(id);
+            }
+            tx.execute(&sql, bind.as_slice())
+                .map_err(|e| e.to_string())?;
+        }
+        let mut stmt = tx
+            .prepare(
+                "INSERT INTO project_commands (id, project_id, title, command, position)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(id) DO UPDATE SET
+                   project_id=excluded.project_id,
+                   title=excluded.title,
+                   command=excluded.command,
+                   position=excluded.position,
+                   updated_at=strftime('%s','now')",
+            )
+            .map_err(|e| e.to_string())?;
+        for (idx, c) in commands.iter().enumerate() {
+            stmt.execute(params![
+                c.id,
+                c.project_id,
+                c.title,
+                c.command,
+                idx as i64
+            ])
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }

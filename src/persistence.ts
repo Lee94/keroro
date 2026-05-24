@@ -17,6 +17,38 @@ export interface SessionRow {
   cliSessionId?: string | null;
 }
 
+export interface ProjectCommandRow {
+  id: string;
+  projectId: string;
+  title?: string | null;
+  command: string;
+  position?: number;
+}
+
+export type CommandRunState =
+  | "idle"
+  | "running"
+  | "success"
+  | "failed"
+  | "killed";
+
+export interface CommandSnapshot {
+  commandId: string;
+  state: CommandRunState;
+  exitCode: number | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+  output: string;
+}
+
+export interface CommandStatusEvent {
+  commandId: string;
+  state: CommandRunState;
+  exitCode: number | null;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
 export interface CliInfo {
   kind: string;
   found: boolean;
@@ -69,6 +101,28 @@ export const replaceSessions = (
   projectId: string,
   sessions: SessionRow[],
 ): Promise<void> => invoke("sessions_replace", { projectId, sessions });
+
+export const listCommands = (projectId: string): Promise<ProjectCommandRow[]> =>
+  invoke<ProjectCommandRow[]>("project_commands_list", { projectId });
+
+export const replaceCommands = (
+  projectId: string,
+  commands: ProjectCommandRow[],
+): Promise<void> => invoke("project_commands_replace", { projectId, commands });
+
+export const runCommandBg = (
+  commandId: string,
+  command: string,
+  cwd: string,
+): Promise<void> => invoke("command_run", { commandId, command, cwd });
+
+export const killCommandBg = (commandId: string): Promise<void> =>
+  invoke("command_kill", { commandId });
+
+export const fetchCommandOutput = (
+  commandId: string,
+): Promise<CommandSnapshot> =>
+  invoke<CommandSnapshot>("command_output", { commandId });
 
 export const getLayout = (projectId: string): Promise<string | null> =>
   invoke<string | null>("layout_get", { projectId });

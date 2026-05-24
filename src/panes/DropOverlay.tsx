@@ -5,7 +5,7 @@ import { computeDropSide, useDrag, type DragInfo } from "./drag";
 import type { DropSide } from "./types";
 
 const SideHighlight: Component<{ side: DropSide }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const rectFor = (): JSX.CSSProperties => {
     switch (props.side) {
       case "left":

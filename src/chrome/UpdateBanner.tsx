@@ -19,7 +19,7 @@ function formatBytes(n: number): string {
 }
 
 export const UpdateBanner: Component = () => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
 
   const visible = (): boolean => {
@@ -137,10 +137,10 @@ export const UpdateBanner: Component = () => {
 function buttonStyle(_kind: "primary"): Record<string, string> {
   const theme = useTheme();
   return {
-    background: theme.accent,
-    color: theme.bg,
+    background: theme().accent,
+    color: theme().bg,
     border: "none",
-    "border-radius": rad(theme, 6),
+    "border-radius": rad(theme(), 6),
     padding: "4px 10px",
     "font-size": "12px",
     "font-family": "var(--ui)",
@@ -155,9 +155,9 @@ function iconButtonStyle(): Record<string, string> {
   const theme = useTheme();
   return {
     background: "transparent",
-    color: theme.textMuted,
+    color: theme().textMuted,
     border: "none",
-    "border-radius": rad(theme, 6),
+    "border-radius": rad(theme(), 6),
     padding: "0",
     width: "22px",
     height: "22px",

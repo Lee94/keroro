@@ -39,7 +39,7 @@ const LeafPaneView: Component<{
   onClose: (tabId: string) => void;
   onDrop: (targetLeafId: string, side: DropSide, info: DragInfo) => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const t = useT();
   const info = useContext(WorkspaceInfoContext);
   const active = (): Tab | undefined => {
@@ -279,7 +279,7 @@ const SplitView: Component<{
   onCloseTab: (leafId: string, tabId: string) => void;
   onDrop: (targetLeafId: string, side: DropSide, info: DragInfo) => void;
 }> = (props) => {
-  const theme = useTheme;
+  const theme = useTheme();
   const isRow = () => props.split.direction === "horizontal";
   let containerRef!: HTMLDivElement;
   const [dragging, setDragging] = createSignal(false);

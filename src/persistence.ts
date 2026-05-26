@@ -15,6 +15,9 @@ export interface SessionRow {
   kind: string;
   title: string;
   cliSessionId?: string | null;
+  // Populated by the backend on read. The replace path ignores it so layout
+  // saves don't clobber the value persisted by [[setSessionLastCommand]].
+  lastCommand?: string | null;
 }
 
 export interface ProjectCommandRow {
@@ -102,6 +105,11 @@ export const replaceSessions = (
   sessions: SessionRow[],
 ): Promise<void> => invoke("sessions_replace", { projectId, sessions });
 
+export const setSessionLastCommand = (
+  id: string,
+  command: string | null,
+): Promise<void> => invoke("session_last_command_set", { id, command });
+
 export const listCommands = (projectId: string): Promise<ProjectCommandRow[]> =>
   invoke<ProjectCommandRow[]>("project_commands_list", { projectId });
 
@@ -144,6 +152,20 @@ export const detectNodeVersion = (cwd: string): Promise<string | null> =>
 
 export const detectGitStatus = (cwd: string): Promise<GitStatus | null> =>
   invoke<GitStatus | null>("detect_git_status", { cwd });
+
+export interface GitBranchInfo {
+  current: string | null;
+  locals: string[];
+}
+
+export const listGitBranches = (cwd: string): Promise<GitBranchInfo> =>
+  invoke<GitBranchInfo>("list_git_branches", { cwd });
+
+export const checkoutGitBranch = (cwd: string, branch: string): Promise<void> =>
+  invoke("checkout_git_branch", { cwd, branch });
+
+export const gitDiff = (cwd: string): Promise<string> =>
+  invoke<string>("git_diff", { cwd });
 
 export const claudeSessionTitle = (
   sessionId: string,

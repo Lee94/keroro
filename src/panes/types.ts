@@ -36,6 +36,11 @@ export interface Tab {
   kind: AgentKind;
   title: string;
   cliSessionId?: string;
+  // Snapshot of the last command this shell session submitted, loaded from
+  // SQLite on boot and replayed (without CR) into the freshly spawned PTY by
+  // XtermPane. Only meaningful for kind === "terminal"; cleared as soon as it
+  // has been consumed so subsequent re-renders don't trigger a re-injection.
+  lastCommand?: string;
 }
 
 export type DropSide = "left" | "right" | "top" | "bottom" | "center";

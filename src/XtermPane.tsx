@@ -24,7 +24,11 @@ import { splitDragging } from "./panes/splitDrag";
 import { clearAttention, detectAttention, setNeedsAttention } from "./panes/attention";
 import { releaseTerminalHost, terminalHost } from "./terminalHost";
 import { getSessionTitle, setSessionTitle } from "./sessionTitles";
-import { claudeSessionTitle, claudeUnlockSession } from "./persistence";
+import {
+  claudeSessionTitle,
+  claudeUnlockSession,
+  setSessionLastCommand,
+} from "./persistence";
 import {
   openTerminalSearch,
   releaseTerminalSearch,
@@ -101,6 +105,13 @@ export const XtermPane: Component<{
    * (e.g. background polling of [[claude_session_title]]).
    */
   cwd?: string;
+  /**
+   * For shell tabs (`command === undefined`) only: the last command this
+   * session submitted before the app last shut down. Replayed once, without
+   * a trailing CR, after the freshly spawned shell has finished rendering
+   * its prompt — the user just hits Enter to run it.
+   */
+  lastCommand?: string;
   /**
    * Invoked when we auto-rotate the CLI session id after a failed --resume
    * (e.g. the JSONL was deleted or another claude process holds it). The
@@ -296,6 +307,99 @@ export const XtermPane: Component<{
   let lastRotationAt = 0;
   const ROTATION_THROTTLE_MS = 8000;
 
+  // ─── Last-command memory (shell tabs only) ─────────────────────────
+  // Shells get a "type and Enter" capture: we accumulate user keystrokes
+  // until they press Enter, then persist the captured line so the next
+  // launch can pre-type it (without CR). The capture is intentionally
+  // conservative — anything we can't reliably track (history nav, cursor
+  // editing, paste sequences, control bytes) resets the buffer so we
+  // never persist a misaligned line.
+  const isShell = props.command === undefined;
+  let inputBuf = "";
+  const INPUT_BUF_MAX = 512;
+
+  const captureKeystroke = (data: string) => {
+    if (!isShell || disposed) return;
+    if (data === "\r" || data === "\n" || data === "\r\n") {
+      const cmd = inputBuf.trim();
+      inputBuf = "";
+      // Empty Enter (just pressing Enter on a blank prompt) shouldn't blow
+      // away the previously-captured command — keep the old memory.
+      if (cmd.length > 0) {
+        setSessionLastCommand(props.sessionId, cmd).catch(() => {});
+      }
+      return;
+    }
+    if (data === "\x7f" || data === "\x08") {
+      const arr = Array.from(inputBuf);
+      if (arr.length > 0) {
+        arr.pop();
+        inputBuf = arr.join("");
+      }
+      return;
+    }
+    // Any escape sequence — history nav (\x1b[A), cursor movement, function
+    // keys, bracketed paste markers — we cannot accurately mirror in the
+    // line buffer, so reset rather than persist a wrong line. The previous
+    // last_command persists in the DB until the next clean Enter overwrites
+    // it.
+    if (data.indexOf("\x1b") !== -1) {
+      inputBuf = "";
+      return;
+    }
+    // Other control bytes (Ctrl-A/E/K/U/W/C, …) likewise mangle the visible
+    // line in ways our buffer can't track.
+    for (let i = 0; i < data.length; i++) {
+      const c = data.charCodeAt(i);
+      if (c < 0x20 || c === 0x7f) {
+        inputBuf = "";
+        return;
+      }
+    }
+    inputBuf += data;
+    if (inputBuf.length > INPUT_BUF_MAX) {
+      inputBuf = inputBuf.slice(-INPUT_BUF_MAX);
+    }
+  };
+
+  // Replay path: wait until the PTY has produced data and then stayed idle
+  // long enough for the prompt to finish rendering, then `pty_write` the
+  // captured command without CR so the user just has to press Enter.
+  // Cancelled the moment the user types their own keystroke — we don't want
+  // to clobber what they're typing.
+  const REPLAY_IDLE_MS = 500;
+  let replayPending = isShell && !!props.lastCommand;
+  let replayIdleHandle: ReturnType<typeof setTimeout> | null = null;
+
+  const cancelReplay = () => {
+    if (!replayPending) return;
+    replayPending = false;
+    if (replayIdleHandle !== null) {
+      clearTimeout(replayIdleHandle);
+      replayIdleHandle = null;
+    }
+  };
+
+  const tryReplay = () => {
+    if (!replayPending || disposed) return;
+    const cmd = props.lastCommand;
+    if (!cmd || inputBuf.length > 0) {
+      replayPending = false;
+      return;
+    }
+    replayPending = false;
+    invoke("pty_write", { id: props.sessionId, data: cmd }).catch(() => {});
+  };
+
+  const armReplayOnPtyData = () => {
+    if (!replayPending) return;
+    if (replayIdleHandle !== null) clearTimeout(replayIdleHandle);
+    replayIdleHandle = setTimeout(() => {
+      replayIdleHandle = null;
+      tryReplay();
+    }, REPLAY_IDLE_MS);
+  };
+
   const tailLooksLikeSessionInUse = () => {
     const buf = term.buffer.active;
     const tailLen = Math.min(40, buf.length);
@@ -420,6 +524,7 @@ export const XtermPane: Component<{
       (event) => {
         term.write(decodeBase64(event.payload));
         scheduleAttentionScan();
+        armReplayOnPtyData();
       },
     );
     if (disposed) {
@@ -454,6 +559,8 @@ export const XtermPane: Component<{
     }
 
     term.onData((data) => {
+      cancelReplay();
+      captureKeystroke(data);
       invoke("pty_write", { id: props.sessionId, data }).catch(() => {});
     });
 
@@ -564,6 +671,10 @@ export const XtermPane: Component<{
 
   onCleanup(() => {
     disposed = true;
+    if (replayIdleHandle !== null) {
+      clearTimeout(replayIdleHandle);
+      replayIdleHandle = null;
+    }
     resizeObserver?.disconnect();
     unlistenData?.();
     unlistenExit?.();

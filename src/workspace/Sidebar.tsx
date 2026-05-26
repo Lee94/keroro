@@ -35,17 +35,18 @@ import { statusColor, statusLabelKey } from "./commandStatus";
 const renderMascot = (
   kind: Workspace["mascot"],
   theme: ReturnType<typeof useTheme>,
+  size = 28,
 ) => {
   const t = theme();
   switch (kind) {
     case "orchid":
-      return <OrchidMascot size={28} outer={t.accent} inner={t.bg} />;
+      return <OrchidMascot size={size} outer={t.accent} inner={t.bg} />;
     case "terminal":
-      return <TerminalMascot size={28} color={t.pixelGreen} />;
+      return <TerminalMascot size={size} color={t.pixelGreen} />;
     case "cube":
-      return <CubeMascot size={28} light={t.pixelBlue} dark={t.accentDim} />;
+      return <CubeMascot size={size} light={t.pixelBlue} dark={t.accentDim} />;
     case "mushroom":
-      return <MushroomMascot size={28} />;
+      return <MushroomMascot size={size} />;
   }
 };
 
@@ -68,17 +69,27 @@ const ProjectRow: Component<{
   const [hover, setHover] = createSignal(false);
   const [deleteHover, setDeleteHover] = createSignal(false);
 
+  // The active project stays "fat" (mascot + name + path) so context is
+  // legible at a glance. Inactive rows collapse to a single line with a
+  // smaller mascot — when the user has 10+ projects this is the difference
+  // between scrolling the list and seeing all of them at once. The path
+  // moves into a tooltip so it's still discoverable.
+  const mascotSize = () => (props.active ? 28 : 18);
+  const mascotBox = () => (props.active ? 30 : 22);
+  const rowPaddingY = () => (props.active ? 8 : 4);
+  const rowMarginY = () => (props.active ? 2 : 1);
   return (
     <div
       onClick={props.onActivate}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      title={props.active ? undefined : props.ws.path}
       style={{
         display: "flex",
         "align-items": "center",
         gap: "8px",
-        padding: "8px 10px 8px 4px",
-        margin: "2px 8px",
+        padding: `${rowPaddingY()}px 10px ${rowPaddingY()}px 4px`,
+        margin: `${rowMarginY()}px 8px`,
         "border-radius": rad(theme(), 10),
         cursor: "pointer",
         position: "relative",
@@ -90,7 +101,7 @@ const ProjectRow: Component<{
         border: props.active
           ? `1px solid ${theme().borderStrong}`
           : "1px solid transparent",
-        transition: "background 90ms",
+        transition: "background 90ms, padding 120ms ease",
       }}
     >
       <button
@@ -121,22 +132,23 @@ const ProjectRow: Component<{
       </button>
       <div
         style={{
-          width: "30px",
-          height: "30px",
+          width: `${mascotBox()}px`,
+          height: `${mascotBox()}px`,
           "flex-shrink": 0,
           display: "flex",
           "align-items": "center",
           "justify-content": "center",
+          transition: "width 120ms ease, height 120ms ease",
         }}
       >
-        {renderMascot(props.ws.mascot, theme)}
+        {renderMascot(props.ws.mascot, theme, mascotSize())}
       </div>
       <div style={{ flex: 1, "min-width": 0 }}>
         <div
           style={{
-            "font-size": "13px",
+            "font-size": props.active ? "13px" : "12.5px",
             "font-weight": 500,
-            color: theme().text,
+            color: props.active ? theme().text : theme().textDim,
             "letter-spacing": "-0.01em",
             overflow: "hidden",
             "text-overflow": "ellipsis",
@@ -145,18 +157,20 @@ const ProjectRow: Component<{
         >
           {props.ws.name}
         </div>
-        <div
-          style={{
-            "font-size": "10.5px",
-            color: theme().textMuted,
-            "font-family": "var(--mono)",
-            overflow: "hidden",
-            "text-overflow": "ellipsis",
-            "white-space": "nowrap",
-          }}
-        >
-          {props.ws.path}
-        </div>
+        <Show when={props.active}>
+          <div
+            style={{
+              "font-size": "10.5px",
+              color: theme().textMuted,
+              "font-family": "var(--mono)",
+              overflow: "hidden",
+              "text-overflow": "ellipsis",
+              "white-space": "nowrap",
+            }}
+          >
+            {props.ws.path}
+          </div>
+        </Show>
       </div>
       <div
         style={{

@@ -2,7 +2,15 @@ use std::collections::HashMap;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command, Stdio};
+
+// CreateProcess flag that suppresses the console window flash a GUI Tauri
+// host gets when spawning `cmd.exe /C ...`. Without it the shell command
+// pops a black box for the duration of the run.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -121,11 +129,31 @@ fn build_shell_command(command: &str) -> Command {
     }
     #[cfg(windows)]
     {
-        let program = pick_shell_program();
-        let mut cmd = Command::new(program);
-        cmd.arg("/C");
-        cmd.arg(command);
+        // Share the terminal pane's shell pick (pwsh → powershell → cmd.exe)
+        // so commands run with the same PATH/aliases the user has in the
+        // built-in terminal. PowerShell variants need `-Command`; cmd needs `/C`.
+        let program = crate::pty::pick_program();
+        let basename = std::path::Path::new(&program)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_default();
+        let is_powershell = basename.starts_with("pwsh") || basename.starts_with("powershell");
+        let mut cmd = Command::new(&program);
+        if is_powershell {
+            // -NoLogo to suppress the banner; we deliberately do NOT pass
+            // -NoProfile so $PROFILE runs and the user's PATH/aliases match
+            // what they get in the terminal pane. Profile cost (~300-700ms)
+            // is the tradeoff documented to the user.
+            cmd.arg("-NoLogo");
+            cmd.arg("-Command");
+            cmd.arg(command);
+        } else {
+            cmd.arg("/C");
+            cmd.arg(command);
+        }
         apply_piped_env(&mut cmd);
+        cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
     }
 }
@@ -224,11 +252,6 @@ fn pick_shell_program() -> String {
         }
     }
     "/bin/sh".to_string()
-}
-
-#[cfg(windows)]
-fn pick_shell_program() -> String {
-    "cmd.exe".to_string()
 }
 
 fn append_output(handle: &RunHandle, chunk: &[u8]) {

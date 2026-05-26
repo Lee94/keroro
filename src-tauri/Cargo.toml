@@ -30,6 +30,7 @@ base64 = "0.22"
 which = "7"
 rusqlite = { version = "0.32", features = ["bundled"] }
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+tokio = { version = "1", features = ["process", "fs", "rt", "io-util", "macros", "sync"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

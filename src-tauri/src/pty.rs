@@ -146,7 +146,7 @@ fn run_command(command: &str, args: &[String], cwd: Option<&str>) -> CommandBuil
 }
 
 #[cfg(windows)]
-fn pick_program() -> String {
+pub(crate) fn pick_program() -> String {
     which::which("pwsh")
         .ok()
         .or_else(|| which::which("powershell").ok())
@@ -155,7 +155,7 @@ fn pick_program() -> String {
 }
 
 #[cfg(not(windows))]
-fn pick_program() -> String {
+pub(crate) fn pick_program() -> String {
     if let Ok(shell) = std::env::var("SHELL") {
         if !shell.is_empty() {
             return shell;

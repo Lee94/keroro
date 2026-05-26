@@ -4,6 +4,85 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-05-26
+
+### Changed
+
+- **Sync version files to released tag** — `package.json`, `Cargo.toml`,
+  `tauri.conf.json`, and `Cargo.lock` had drifted to `0.4.2` while
+  `v0.5.0` and `v0.6.0` shipped as tags only. Bumped to `0.6.1` and
+  backfilled the CHANGELOG entries below.
+
+## [0.6.0] - 2026-05-25
+
+### Added
+
+- **Git diff side panel** — clicking the dirty/clean chip in the status
+  bar slides in a per-file diff view on the right. Files are listed
+  collapsed (status badge + path + per-file `+/-`); clicking a row
+  expands its hunks inline. Untracked files are synthesized as "new
+  file" entries so they show alongside tracked modifications. External
+  diff tools (`delta`, `difftastic`) are overridden so the parser always
+  sees standard unified diff output. Status-bar chip totals mirror the
+  panel's totals (untracked lines included).
+
+### Performance
+
+- **Async-first backend** — `tokio::process` for subprocess spawns and
+  `tokio::join!` for independent git calls inside `git_diff` and
+  `detect_git_status`. Per-file untracked synthesis fans out via
+  `tokio::spawn` so a repo with many new files reads them in parallel
+  instead of serially. Untracked line counts cache by `mtime + size` so
+  the 5s status poll skips re-reading unchanged files. Claude
+  session-title polling also moved to async fs.
+- **Deferred diff parsing on the frontend** — `parseDiff` runs via
+  `createDeferred` so very large diffs don't stall the main thread when
+  results land. `DiffView` stays mounted (CSS-hidden) so toggling
+  open/close reuses the cached file list instead of re-invoking git.
+
+## [0.5.0] - 2026-05-25
+
+### Added
+
+- **8-theme overhaul** — replaces the 4 prior themes with 8
+  brand-inspired palettes (OpenAI, Anthropic, Zed, GitHub × dark/light);
+  default switches to `anthropic-dark`. Dedicated cyan/magenta tokens
+  (xterm no longer collapses them into `accent`/`blue`). Deeper contrast
+  steps (`panelAlt`, `borderStrong`) in light themes so hover/selected
+  states read against chrome.
+- **Compact theme picker** — select-style dropdown with a mini-swatch
+  trigger and a popover swatch grid, replacing the always-expanded grid
+  that wasted vertical space as the theme count grew. `RadioRow` gains
+  an explicit hover state; selected uses accent border so the three
+  states are visually distinct on every theme.
+- **Tasks panel** — runtime CPU / memory view of running PTY sessions
+  with force-kill, backed by a new `sysinfo`-powered `proc_stats`
+  module.
+- **Truecolor terminal output** — `COLORTERM=truecolor` exported to PTY
+  children so CLIs that gate 24-bit emission on it now produce full
+  RGB. ANSI bright-black routes through `textDim` so CLI dim glyphs
+  (Claude Code's leading dot, git's dim path segments) stay readable.
+- **1px window outline** — theme `border` outline on the outer container
+  defines the edge under `decorations: false` + `transparent: true`.
+
+### Changed
+
+- **`ClaudeCodeMascot`** gains a separate highlight (flame) color so the
+  ember critter reads as three color zones instead of a single tone.
+
+### Internal
+
+- **`safeWrite` localStorage helper** — `settings/storage.ts` now exposes
+  `writeThemeName` / `writeLocale` / `writeSidebarOpen` /
+  `writeTermFont*` so `App.tsx` no longer pokes `localStorage` directly.
+- **Dead-code sweep** — drop unused exports (`clearSessionTitle`,
+  `useLocale`, `CLI_KINDS`, `mixHex`, `isLightTheme`, `brighten`,
+  `Theme.name`); drop unused `AddMenu.anchorBelow`, `UpdateBanner`
+  button-style arg, `Sidebar.attnTabs` alias, `XtermPane` debug log.
+- **Rust cleanups** — `repeat_n` over deprecated `repeat().take()` in
+  `db.rs`; drop redundant `&"WAL"` / `&"ON"` refs. Tighten
+  `CommandEditorModal` `Field` children type from `any` to `JSX.Element`.
+
 ## [0.4.2] - 2026-05-24
 
 ### Added
@@ -131,6 +210,9 @@ Initial release.
 - Per-project persistence of layout, sessions, and active project.
 - CI release workflow producing macOS arm64 and Windows builds.
 
+[0.6.1]: https://github.com/Lee94/keroro/releases/tag/v0.6.1
+[0.6.0]: https://github.com/Lee94/keroro/releases/tag/v0.6.0
+[0.5.0]: https://github.com/Lee94/keroro/releases/tag/v0.5.0
 [0.4.2]: https://github.com/Lee94/keroro/releases/tag/v0.4.2
 [0.4.1]: https://github.com/Lee94/keroro/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Lee94/keroro/releases/tag/v0.4.0

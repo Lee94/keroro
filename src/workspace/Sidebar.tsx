@@ -55,6 +55,10 @@ const renderMascot = (
 // switching the active workspace. Click on the rest of the row activates the
 // project AND auto-expands it (it's annoying to lose your view of children
 // just because you clicked a sibling).
+//
+// Row height is constant regardless of active state — switching projects
+// should change colors, not push neighbors around. The path lives in a
+// tooltip so the row stays one line.
 const ProjectRow: Component<{
   ws: Workspace;
   active: boolean;
@@ -69,28 +73,19 @@ const ProjectRow: Component<{
   const [hover, setHover] = createSignal(false);
   const [deleteHover, setDeleteHover] = createSignal(false);
 
-  // The active project stays "fat" (mascot + name + path) so context is
-  // legible at a glance. Inactive rows collapse to a single line with a
-  // smaller mascot — when the user has 10+ projects this is the difference
-  // between scrolling the list and seeing all of them at once. The path
-  // moves into a tooltip so it's still discoverable.
-  const mascotSize = () => (props.active ? 28 : 18);
-  const mascotBox = () => (props.active ? 30 : 22);
-  const rowPaddingY = () => (props.active ? 8 : 4);
-  const rowMarginY = () => (props.active ? 2 : 1);
   return (
     <div
       onClick={props.onActivate}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={props.active ? undefined : props.ws.path}
+      title={props.ws.path}
       style={{
         display: "flex",
         "align-items": "center",
         gap: "8px",
-        padding: `${rowPaddingY()}px 10px ${rowPaddingY()}px 4px`,
-        margin: `${rowMarginY()}px 8px`,
-        "border-radius": rad(theme(), 10),
+        padding: "6px 10px 6px 4px",
+        margin: "1px 8px",
+        "border-radius": rad(theme(), 8),
         cursor: "pointer",
         position: "relative",
         background: props.active
@@ -101,7 +96,7 @@ const ProjectRow: Component<{
         border: props.active
           ? `1px solid ${theme().borderStrong}`
           : "1px solid transparent",
-        transition: "background 90ms, padding 120ms ease",
+        transition: "background 90ms",
       }}
     >
       <button
@@ -132,21 +127,20 @@ const ProjectRow: Component<{
       </button>
       <div
         style={{
-          width: `${mascotBox()}px`,
-          height: `${mascotBox()}px`,
+          width: "22px",
+          height: "22px",
           "flex-shrink": 0,
           display: "flex",
           "align-items": "center",
           "justify-content": "center",
-          transition: "width 120ms ease, height 120ms ease",
         }}
       >
-        {renderMascot(props.ws.mascot, theme, mascotSize())}
+        {renderMascot(props.ws.mascot, theme, 18)}
       </div>
       <div style={{ flex: 1, "min-width": 0 }}>
         <div
           style={{
-            "font-size": props.active ? "13px" : "12.5px",
+            "font-size": "13px",
             "font-weight": 500,
             color: props.active ? theme().text : theme().textDim,
             "letter-spacing": "-0.01em",
@@ -157,20 +151,6 @@ const ProjectRow: Component<{
         >
           {props.ws.name}
         </div>
-        <Show when={props.active}>
-          <div
-            style={{
-              "font-size": "10.5px",
-              color: theme().textMuted,
-              "font-family": "var(--mono)",
-              overflow: "hidden",
-              "text-overflow": "ellipsis",
-              "white-space": "nowrap",
-            }}
-          >
-            {props.ws.path}
-          </div>
-        </Show>
       </div>
       <div
         style={{
@@ -550,6 +530,7 @@ const ProjectGroup: Component<{
   activeTabIds: ReadonlySet<string>;
   tabs: PaletteEntry[];
   commands: ProjectCommandRow[];
+  showDivider: boolean;
   onActivateWs: () => void;
   onToggleExpand: () => void;
   onDeleteWs: () => void;
@@ -563,7 +544,13 @@ const ProjectGroup: Component<{
   const theme = useTheme();
   const t = useT();
   return (
-    <div style={{ "margin-bottom": "2px" }}>
+    <div
+      style={{
+        "margin-bottom": "2px",
+        "padding-top": props.showDivider ? "6px" : "0",
+        "border-top": props.showDivider ? `1px solid ${theme().border}` : "none",
+      }}
+    >
       <ProjectRow
         ws={props.ws}
         active={props.active}
@@ -816,7 +803,7 @@ export const Sidebar: Component<{
             }
           >
             <For each={props.workspaces}>
-              {(ws) => (
+              {(ws, index) => (
                 <ProjectGroup
                   ws={ws}
                   active={props.active === ws.id}
@@ -827,6 +814,7 @@ export const Sidebar: Component<{
                   activeTabIds={props.activeTabIds}
                   tabs={tabsByWs()[ws.id] ?? []}
                   commands={props.commandsByWs[ws.id] ?? []}
+                  showDivider={index() > 0}
                   onActivateWs={() => handleActivate(ws.id)}
                   onToggleExpand={() => toggleExpand(ws.id)}
                   onDeleteWs={() => props.onDelete(ws.id)}

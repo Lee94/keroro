@@ -3,20 +3,17 @@ import {
   For,
   onCleanup,
   Show,
-  useContext,
   type Component,
 } from "solid-js";
 import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { useT } from "../i18n";
 import { TerminalMascot } from "../mascots";
-import { WorkspaceInfoContext } from "../themeContext";
 import { terminalHost } from "../terminalHost";
 import { AgentContent } from "../agents/AgentContent";
 import { defaultTabTitle } from "../sessionTitles";
 import { TabBar } from "./TabBar";
 import { DropOverlay } from "./DropOverlay";
-import { PaneFooter, type ChipDef } from "./Chip";
 import { TerminalSearchBar } from "./TerminalSearchBar";
 import type { DragInfo } from "./drag";
 import { setSplitDragging } from "./splitDrag";
@@ -41,7 +38,6 @@ const LeafPaneView: Component<{
 }> = (props) => {
   const theme = useTheme();
   const t = useT();
-  const info = useContext(WorkspaceInfoContext);
   const active = (): Tab | undefined => {
     const l = props.leaf;
     return l.tabs.find((t) => t.id === l.activeTab) ?? l.tabs[0];
@@ -60,44 +56,6 @@ const LeafPaneView: Component<{
       tabs: [...leaf.tabs, newTab],
       activeTab: id,
     }));
-  };
-
-  const chips = (): ChipDef[] => {
-    const t = theme();
-    const a = active();
-    if (!a) return [];
-    const out: ChipDef[] = [];
-    if (a.kind === "terminal") {
-      const ver = info.node();
-      if (ver) out.push({ icon: "node", label: ver, color: t.green });
-    }
-    const git = info.gitStatus();
-    const branch = git?.branch ?? info.branch();
-    if (branch) out.push({ icon: "branch", label: branch, color: t.amber });
-    if (git) {
-      const sync = [
-        git.ahead > 0 ? `↑${git.ahead}` : null,
-        git.behind > 0 ? `↓${git.behind}` : null,
-      ].filter(Boolean);
-      if (sync.length > 0) {
-        out.push({ icon: "branch", label: sync.join(" "), color: t.blue });
-      }
-
-      if (git.dirty) {
-        const changedLines = [
-          git.additions > 0 ? `+${git.additions}` : null,
-          git.deletions > 0 ? `-${git.deletions}` : null,
-        ].filter(Boolean);
-        out.push({
-          icon: "dot",
-          label: changedLines.length > 0 ? changedLines.join(" ") : "dirty",
-          color: t.yellow,
-        });
-      } else {
-        out.push({ icon: "dot", label: "clean", color: t.green });
-      }
-    }
-    return out;
   };
 
   return (
@@ -224,7 +182,6 @@ const LeafPaneView: Component<{
           <TerminalSearchBar sessionId={active()!.id} />
         </Show>
       </div>
-      <PaneFooter chips={chips()} />
     </div>
   );
 };

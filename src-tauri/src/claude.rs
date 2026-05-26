@@ -1,7 +1,7 @@
-use std::io::BufRead;
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use tokio::io::AsyncBufReadExt;
 
 // Claude Code encodes a project directory by replacing every path-syntax
 // character (`/`, `\`, `:`, `.`) with `-`, then storing the session JSONL
@@ -56,11 +56,15 @@ pub fn claude_spawn_args(session_id: String, cwd: Option<String>) -> Vec<String>
 // title reflects what the user actually typed. Returns None until the user
 // has sent at least one real message.
 #[tauri::command]
-pub fn claude_session_title(session_id: String, cwd: Option<String>) -> Option<String> {
+pub async fn claude_session_title(session_id: String, cwd: Option<String>) -> Option<String> {
     let path = cwd.as_deref().and_then(|c| session_file_path(c, &session_id))?;
-    let file = std::fs::File::open(path).ok()?;
-    let reader = std::io::BufReader::new(file);
-    for line in reader.lines().map_while(Result::ok) {
+    // JSONL files grow over the lifetime of a session — async I/O so the 5 s
+    // poll-per-tab loop doesn't hold a Tauri worker thread for the entire
+    // open-read-scan cycle.
+    let file = tokio::fs::File::open(path).await.ok()?;
+    let reader = tokio::io::BufReader::new(file);
+    let mut lines = reader.lines();
+    while let Ok(Some(line)) = lines.next_line().await {
         if let Some(title) = extract_user_prompt_title(&line) {
             return Some(title);
         }
@@ -131,21 +135,21 @@ struct ClaudeSessionRegistryEntry {
 // always left alone; if the registered pid is still running, this is a
 // real conflict and the caller must rotate the id instead.
 #[tauri::command]
-pub fn claude_unlock_session(session_id: String) -> Result<bool, String> {
+pub async fn claude_unlock_session(session_id: String) -> Result<bool, String> {
     let home = std::env::var("HOME").map_err(|e| format!("HOME 未设置: {e}"))?;
     let dir = PathBuf::from(home).join(".claude").join("sessions");
-    let entries = match std::fs::read_dir(&dir) {
+    let mut entries = match tokio::fs::read_dir(&dir).await {
         Ok(e) => e,
         // No registry dir → nothing to unlock, that's a success-equivalent.
         Err(_) => return Ok(false),
     };
     let mut unlocked = false;
-    for entry in entries.flatten() {
+    while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         if path.extension().and_then(|s| s.to_str()) != Some("json") {
             continue;
         }
-        let content = match std::fs::read_to_string(&path) {
+        let content = match tokio::fs::read_to_string(&path).await {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -160,7 +164,7 @@ pub fn claude_unlock_session(session_id: String) -> Result<bool, String> {
             // Real running claude owns it — don't touch.
             continue;
         }
-        if std::fs::remove_file(&path).is_ok() {
+        if tokio::fs::remove_file(&path).await.is_ok() {
             unlocked = true;
         }
     }

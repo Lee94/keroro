@@ -54,6 +54,8 @@ export function layoutToPaneTree(
         kind,
         title: s.title,
         cliSessionId: s.cliSessionId ?? undefined,
+        lastCommand:
+          kind === "terminal" && s.lastCommand ? s.lastCommand : undefined,
       });
     }
     let activeTab = node.activeTabId;

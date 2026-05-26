@@ -12,12 +12,22 @@ export interface WorkspaceInfo {
   node: Accessor<string | null>;
   branch: Accessor<string | null>;
   gitStatus: Accessor<GitStatus | null>;
+  /** Project-cwd of the currently active workspace, used for direct git ops
+   *  triggered from the status bar (branch checkout) where waiting for the
+   *  5s polling cycle would feel laggy. Null when no workspace is active. */
+  cwd: Accessor<string | null>;
+  /** Force an immediate git status re-read; the status-bar branch menu calls
+   *  this right after `git checkout` so the chips update without waiting for
+   *  the next polling tick. */
+  refreshGit: () => void;
 }
 
 export const WorkspaceInfoContext = createContext<WorkspaceInfo>({
   node: () => null,
   branch: () => null,
   gitStatus: () => null,
+  cwd: () => null,
+  refreshGit: () => {},
 });
 
 export const InstalledClisContext = createContext<Accessor<Map<string, string>>>(

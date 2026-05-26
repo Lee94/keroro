@@ -56,7 +56,15 @@ pub fn open(app: &AppHandle) -> Result<Db, String> {
         .app_data_dir()
         .map_err(|e| format!("resolve app data dir: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create app data dir: {e}"))?;
-    let path = dir.join("keroro.db");
+    // Keep dev (`pnpm tauri dev`, a debug build) and production (release
+    // bundle) on separate database files so experimenting locally can't
+    // corrupt or churn the installed app's state.
+    let filename = if cfg!(debug_assertions) {
+        "keroro-dev.db"
+    } else {
+        "keroro.db"
+    };
+    let path = dir.join(filename);
     let conn = Connection::open(&path).map_err(|e| format!("open sqlite: {e}"))?;
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| format!("set WAL: {e}"))?;
@@ -67,6 +75,8 @@ pub fn open(app: &AppHandle) -> Result<Db, String> {
     // Migration: add cli_session_id to existing sessions tables. Silently
     // ignore the "duplicate column" error from sqlite for already-migrated DBs.
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN cli_session_id TEXT", []);
+    // Migration: per-terminal last command, replayed (without CR) on next boot.
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN last_command TEXT", []);
     Ok(Db(Mutex::new(conn)))
 }
 
@@ -101,6 +111,12 @@ pub struct SessionRow {
     pub title: String,
     #[serde(rename = "cliSessionId", default, skip_serializing_if = "Option::is_none")]
     pub cli_session_id: Option<String>,
+    // Read-only on the replace path: the upsert SQL deliberately omits this
+    // column so layout saves never blow away the last_command captured by the
+    // terminal input handler. Populated by [`sessions_list`] so the frontend
+    // can replay it on the next boot.
+    #[serde(rename = "lastCommand", default, skip_serializing_if = "Option::is_none")]
+    pub last_command: Option<String>,
 }
 
 fn lock<'a>(db: &'a State<'_, Db>) -> Result<std::sync::MutexGuard<'a, Connection>, String> {
@@ -208,7 +224,7 @@ pub fn sessions_list(db: State<'_, Db>, project_id: String) -> Result<Vec<Sessio
     let conn = lock(&db)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, project_id, kind, title, cli_session_id FROM sessions
+            "SELECT id, project_id, kind, title, cli_session_id, last_command FROM sessions
              WHERE project_id = ?1 ORDER BY created_at",
         )
         .map_err(|e| e.to_string())?;
@@ -220,6 +236,7 @@ pub fn sessions_list(db: State<'_, Db>, project_id: String) -> Result<Vec<Sessio
                 kind: row.get(2)?,
                 title: row.get(3)?,
                 cli_session_id: row.get(4)?,
+                last_command: row.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -279,6 +296,24 @@ pub fn sessions_replace(
         }
     }
     tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Set the last command typed in a shell-kind session. Called from the
+// terminal input handler each time the user presses Enter, so it can be
+// re-typed (without CR) into the PTY on the next boot of this session.
+#[tauri::command]
+pub fn session_last_command_set(
+    db: State<'_, Db>,
+    id: String,
+    command: Option<String>,
+) -> Result<(), String> {
+    let conn = lock(&db)?;
+    conn.execute(
+        "UPDATE sessions SET last_command = ?1 WHERE id = ?2",
+        params![command, id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

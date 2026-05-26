@@ -46,6 +46,8 @@ import {
 import { DragContext } from "./panes/drag";
 import type { DragInfo } from "./panes/drag";
 import { PaneTreeView } from "./panes/PaneView";
+import { ProjectStatusBar } from "./panes/ProjectStatusBar";
+import { DiffView } from "./panes/DiffView";
 import {
   closeTabInTree,
   defaultPanes,
@@ -114,6 +116,7 @@ const App: Component = () => {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [tasksOpen, setTasksOpen] = createSignal(false);
+  const [diffOpen, setDiffOpen] = createSignal(false);
   const [sidebarOpen, setSidebarOpen] = createSignal<boolean>(readSidebarOpen());
   const [termFontSize, setTermFontSizeSignal] = createSignal<number>(readTermFontSize());
   const setTermFontSize = (n: number) => {
@@ -642,11 +645,17 @@ const App: Component = () => {
   const nodeVersionCache = new Map<string, string | null>();
   const gitStatusCache = new Map<string, GitStatus | null>();
 
+  // Holds the current cwd's refresh trigger so the branch menu (mounted at a
+  // different depth) can force an immediate re-read instead of waiting up to
+  // 5s for the polling tick. Replaced each time `currentPath` changes.
+  let activeGitRefresh: (() => void) | null = null;
+
   createEffect(() => {
     const path = currentPath();
     if (!path) {
       setNodeVersion(null);
       setGitStatus(null);
+      activeGitRefresh = null;
       return;
     }
 
@@ -683,11 +692,13 @@ const App: Component = () => {
           setGitStatus(null);
         });
     };
+    activeGitRefresh = refreshGitStatus;
     refreshGitStatus();
     const id = setInterval(refreshGitStatus, 5000);
     onCleanup(() => {
       alive = false;
       clearInterval(id);
+      if (activeGitRefresh === refreshGitStatus) activeGitRefresh = null;
     });
   });
 
@@ -695,6 +706,10 @@ const App: Component = () => {
     node: nodeVersion,
     branch: () => gitStatus()?.branch ?? null,
     gitStatus,
+    cwd: () => currentPath() ?? null,
+    refreshGit: () => {
+      activeGitRefresh?.();
+    },
   };
 
   const setRootForWs = (wsId: string, newRoot: PaneNode) => {
@@ -873,16 +888,37 @@ const App: Component = () => {
                 * with display:none/flex so switching projects doesn't unmount
                 * leaves / re-parent xterm containers / refit. Costs a few
                 * extra DOM nodes but eliminates the per-switch reflow burst
-                * (especially heavy on Windows WebView2 + WebGL). */}
+                * (especially heavy on Windows WebView2 + WebGL).
+                *
+                * Outer column wraps the pane stack + a single project-level
+                * status bar at the bottom (chips read the active workspace via
+                * WorkspaceInfoContext, so one instance covers every project). */}
               <div
                 style={{
                   flex: 1,
                   display: "flex",
-                  position: "relative",
+                  "flex-direction": "column",
                   "min-width": 0,
                   "min-height": 0,
                 }}
               >
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    "min-width": 0,
+                    "min-height": 0,
+                  }}
+                >
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    position: "relative",
+                    "min-width": 0,
+                    "min-height": 0,
+                  }}
+                >
                 <For each={workspaces()}>
                   {(ws) => {
                     const wp = createMemo(() => panes()[ws.id]);
@@ -929,12 +965,26 @@ const App: Component = () => {
                       }
                       cliSessionId={t.cliSessionId}
                       cwd={tabCwds().get(t.id)}
+                      lastCommand={
+                        t.kind === "terminal" ? t.lastCommand : undefined
+                      }
                       onCliSessionRotated={(newId) =>
                         rotateTabCliSession(t.id, newId)
                       }
                     />
                   )}
-                </For>
+                  </For>
+                </div>
+                <DiffView
+                  cwd={currentPath() ?? null}
+                  open={diffOpen()}
+                  onClose={() => setDiffOpen(false)}
+                />
+                </div>
+                <ProjectStatusBar
+                  diffOpen={diffOpen()}
+                  onToggleDiff={() => setDiffOpen((o) => !o)}
+                />
               </div>
             </Show>
           </div>

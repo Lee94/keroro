@@ -4,6 +4,53 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-28
+
+### Added
+
+- **"Open in editor" status-bar chip** — detects Zed / VS Code / Cursor
+  on `PATH` and launches the current project in one click. On macOS the
+  detector falls back to looking up the `.app` bundle in `/Applications`
+  and `~/Applications` and launching via `/usr/bin/open -a`, so users
+  who dragged the editor in and never ran "Install shell command" still
+  get the chip. Backed by new `detect_editors` / `open_in_editor` Tauri
+  commands and an `editor` icon.
+- **Sidebar TERMINALS "+"** — trailing affordance on the section header
+  appends a shell tab to the project's first leaf and activates it, so
+  you no longer need to dig into the pane to open a new terminal.
+- **Diff side panel resize** — drag the left edge to resize the panel;
+  width persists across sessions. Hunk rows now wrap in a
+  `width: max-content` track so background tints span the full scroll
+  width on long lines instead of clipping at the viewport edge.
+
+### Changed
+
+- **Constant-height sidebar project rows** — dropped the
+  active/inactive size variants so switching projects only changes
+  colors, not row height. Path moved into a tooltip on every row
+  (was inline on the active row only), and a divider separates project
+  groups.
+
+### Fixed
+
+- **Dead CLI tabs degrade to a shell in place** — when a CLI child
+  exits, the tab no longer becomes a useless `[process exited]` box.
+  New `pty_respawn_as_shell` spawns a login shell in the same pane so
+  the slot stays usable.
+- **Windows background commands didn't reap** — reparented grandchildren
+  held the supervisor's pipes open. Tear-down now uses
+  `taskkill /F /T` so the whole tree closes and the supervisor exits
+  cleanly.
+- **Terminal freeze on first mount in packaged builds** — `@xterm/*`
+  pinned back to `6.x-beta.220`. The beta.226 line's WebGL addon caches
+  `screenElement.isConnected` and gates every render on that flag; the
+  production Tauri WebView momentarily detaches the terminal container
+  during first mount (re-parented through `terminalHost` into the
+  active leaf), latching the flag false and freezing the pane until
+  manual reload. With the pin reverted, the renderer switches back from
+  the canvas addon to `WebglAddon` and the Vite alias workaround for
+  the canvas addon's broken `module` field is removed.
+
 ## [0.6.1] - 2026-05-26
 
 ### Changed
@@ -210,6 +257,7 @@ Initial release.
 - Per-project persistence of layout, sessions, and active project.
 - CI release workflow producing macOS arm64 and Windows builds.
 
+[0.7.0]: https://github.com/Lee94/keroro/releases/tag/v0.7.0
 [0.6.1]: https://github.com/Lee94/keroro/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Lee94/keroro/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Lee94/keroro/releases/tag/v0.5.0

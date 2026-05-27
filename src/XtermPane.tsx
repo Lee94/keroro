@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { CanvasAddon } from "@xterm/addon-canvas";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -242,16 +242,24 @@ export const XtermPane: Component<{
   let opened = false;
   let started = false;
   let disposed = false;
-  let canvas: CanvasAddon | null = null;
+  let webgl: WebglAddon | null = null;
 
-  const tryLoadCanvas = () => {
-    if (disposed || canvas) return;
+  // WebGL renderer preserves truecolor pixel values verbatim, which the DOM
+  // fallback would mangle by snapping low-contrast cells to meet AA (it
+  // collapses Claude Code's pixel mascot / neofetch gradients). Context loss
+  // (driver reset, tab discard) flips it back to DOM automatically.
+  const tryLoadWebgl = () => {
+    if (disposed || webgl) return;
     try {
-      const addon = new CanvasAddon();
+      const addon = new WebglAddon();
+      addon.onContextLoss(() => {
+        addon.dispose();
+        if (webgl === addon) webgl = null;
+      });
       term.loadAddon(addon);
-      canvas = addon;
+      webgl = addon;
     } catch {
-      canvas = null;
+      webgl = null;
     }
   };
 
@@ -622,11 +630,7 @@ export const XtermPane: Component<{
       requestAnimationFrame(() => {
         if (disposed) return;
         term.open(container);
-        // Canvas renderer renders truecolor faithfully (the DOM
-        // fallback would force every low-contrast pixel to meet AA,
-        // which mangles gradient ASCII art). Falls back gracefully
-        // to DOM if the 2D context can't be created.
-        tryLoadCanvas();
+        tryLoadWebgl();
         opened = true;
         resizeObserver = new ResizeObserver(() => doFit());
         resizeObserver.observe(container);
@@ -715,8 +719,8 @@ export const XtermPane: Component<{
     unlistenData?.();
     unlistenExit?.();
     invoke("pty_kill", { id: props.sessionId }).catch(() => {});
-    canvas?.dispose();
-    canvas = null;
+    webgl?.dispose();
+    webgl = null;
     term.dispose();
     if (container.parentElement) {
       container.parentElement.removeChild(container);

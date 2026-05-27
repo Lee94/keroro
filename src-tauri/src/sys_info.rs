@@ -28,11 +28,19 @@ pub struct EditorInfo {
 }
 
 // Order here is also the order shown in the status-bar menu. Each entry maps
-// the editor's internal id to the CLI shim name that ships with it on PATH.
-const EDITOR_BINARIES: &[(&str, &str)] = &[
-    ("zed", "zed"),
-    ("vscode", "code"),
-    ("cursor", "cursor"),
+// the editor's internal id to (CLI shim name on PATH, macOS .app bundle names
+// to probe). On Mac many users install editors by dragging the .app into
+// /Applications and never run the "Install shell command" step, so PATH-only
+// detection silently hid the entire chip. We fall back to bundle detection
+// and launch via `open -a` so the button still appears for those users.
+const EDITOR_BINARIES: &[(&str, &str, &[&str])] = &[
+    ("zed", "zed", &["Zed.app", "Zed Preview.app"]),
+    (
+        "vscode",
+        "code",
+        &["Visual Studio Code.app", "Visual Studio Code - Insiders.app"],
+    ),
+    ("cursor", "cursor", &["Cursor.app"]),
 ];
 
 #[derive(Serialize)]
@@ -81,6 +89,35 @@ pub fn find_cli(name: &str) -> Option<PathBuf> {
     None
 }
 
+// macOS-only: look up an editor's .app bundle in the standard install
+// locations. Returns the first match in iteration order, so list the
+// preferred bundle name first in EDITOR_BINARIES.
+#[cfg(target_os = "macos")]
+fn find_app_bundle(names: &[&str]) -> Option<PathBuf> {
+    let home = std::env::var("HOME").ok().map(PathBuf::from);
+    let dirs: Vec<PathBuf> = [
+        Some(PathBuf::from("/Applications")),
+        home.as_ref().map(|h| h.join("Applications")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    for dir in &dirs {
+        for name in names {
+            let candidate = dir.join(name);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn find_app_bundle(_names: &[&str]) -> Option<PathBuf> {
+    None
+}
+
 // Build a `tokio::process::Command` with the windows-only no-window flag
 // applied. All subprocess spawns funnel through here so we never accidentally
 // flash a console window — and so any future shared flags only need to be set
@@ -126,8 +163,12 @@ async fn run_git_capture(cwd: &str, args: &[&str]) -> Result<String, String> {
 pub fn detect_editors() -> Vec<EditorInfo> {
     EDITOR_BINARIES
         .iter()
-        .map(|(kind, bin)| {
-            let path = find_cli(bin);
+        .map(|(kind, bin, bundles)| {
+            // Prefer the CLI shim because it's a tighter contract (launches
+            // straight into the directory we hand it). Fall back to the .app
+            // bundle so Mac users who skipped the "Install shell command"
+            // step still get a working button.
+            let path = find_cli(bin).or_else(|| find_app_bundle(bundles));
             EditorInfo {
                 kind: (*kind).to_string(),
                 found: path.is_some(),
@@ -141,19 +182,32 @@ pub fn detect_editors() -> Vec<EditorInfo> {
 // hold onto the Child, so the editor lives past Faye exiting. On Windows the
 // CLI shim is usually a `.cmd` (resolved by `find_cli`); rustc 1.78+ routes
 // `.cmd`/`.bat` through cmd.exe internally, so a direct spawn is safe.
+//
+// macOS fallback: when the editor's CLI shim isn't installed we look up the
+// .app bundle and launch via `/usr/bin/open -a <bundle> <cwd>`. `open` itself
+// returns immediately and detaches the GUI app from us, so no process_group
+// dance is needed for that branch.
 #[tauri::command]
 pub fn open_in_editor(editor: String, cwd: String) -> Result<(), String> {
-    let bin = EDITOR_BINARIES
+    let spec = EDITOR_BINARIES
         .iter()
-        .find(|(kind, _)| *kind == editor)
-        .map(|(_, b)| *b)
+        .find(|(kind, _, _)| *kind == editor)
         .ok_or_else(|| format!("未知编辑器：{}", editor))?;
-    let program =
-        find_cli(bin).ok_or_else(|| format!("{} 未安装或未在 PATH 中找到 `{}`", editor, bin))?;
+    let (_, bin, bundles) = spec;
 
-    let mut cmd = std::process::Command::new(&program);
-    cmd.arg(&cwd);
-    cmd.current_dir(&cwd);
+    if let Some(program) = find_cli(bin) {
+        return spawn_editor_cli(&program, &cwd, &editor);
+    }
+    if let Some(bundle) = find_app_bundle(bundles) {
+        return spawn_editor_bundle(&bundle, &cwd, &editor);
+    }
+    Err(format!("{} 未安装或未在 PATH 中找到 `{}`", editor, bin))
+}
+
+fn spawn_editor_cli(program: &Path, cwd: &str, editor: &str) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(program);
+    cmd.arg(cwd);
+    cmd.current_dir(cwd);
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());
@@ -172,6 +226,23 @@ pub fn open_in_editor(editor: String, cwd: String) -> Result<(), String> {
     cmd.spawn()
         .map(|_| ())
         .map_err(|e| format!("启动 {} 失败：{}", editor, e))
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_editor_bundle(bundle: &Path, cwd: &str, editor: &str) -> Result<(), String> {
+    let mut cmd = std::process::Command::new("/usr/bin/open");
+    cmd.arg("-a").arg(bundle).arg(cwd);
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| format!("启动 {} 失败：{}", editor, e))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn spawn_editor_bundle(_bundle: &Path, _cwd: &str, editor: &str) -> Result<(), String> {
+    Err(format!("不支持的平台启动方式：{}", editor))
 }
 
 #[tauri::command]

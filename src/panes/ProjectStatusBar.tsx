@@ -2,6 +2,7 @@ import {
   createSignal,
   For,
   Show,
+  onMount,
   useContext,
   type Component,
 } from "solid-js";
@@ -9,9 +10,14 @@ import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon, type IconName } from "../ui/Icon";
 import { WorkspaceInfoContext } from "../themeContext";
+import { useT } from "../i18n";
 import {
   checkoutGitBranch,
+  detectEditors,
   listGitBranches,
+  openInEditor,
+  type EditorInfo,
+  type EditorKind,
   type GitBranchInfo,
 } from "../persistence";
 
@@ -349,13 +355,180 @@ const BranchMenu: Component<{
   );
 };
 
+// Editor opener button — mirrors BranchChip's button-chip styling so it visually
+// belongs with the other status-bar pills. Clicking toggles a small menu listing
+// editors detected on PATH. Hidden entirely when none are detected so the bar
+// stays clean for users without `zed`/`code`/`cursor` installed.
+const EditorChip: Component<{
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}> = (props) => {
+  const theme = useTheme();
+  const [hover, setHover] = createSignal(false);
+  return (
+    <button
+      type="button"
+      onClick={props.onToggle}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={props.label}
+      style={{
+        display: "inline-flex",
+        "align-items": "center",
+        gap: "6px",
+        padding: "4px 10px 4px 9px",
+        height: "24px",
+        background: props.open ? theme().panel : theme().panelAlt,
+        border: `1px solid ${
+          props.open || hover() ? theme().accent : theme().border
+        }`,
+        "border-radius": rad(theme(), 7),
+        "font-size": "11.5px",
+        color: theme().textDim,
+        "font-family": "var(--mono)",
+        "letter-spacing": "-0.01em",
+        cursor: "pointer",
+        transition: "border-color 120ms",
+      }}
+    >
+      <Icon name="editor" size={11} color={theme().textMuted} />
+      <span>{props.label}</span>
+      <Icon name="caret" size={9} color={theme().textMuted} />
+    </button>
+  );
+};
+
+const EditorMenu: Component<{
+  cwd: string;
+  editors: EditorInfo[];
+  onClose: () => void;
+  onLaunchError: (msg: string) => void;
+}> = (props) => {
+  const theme = useTheme();
+  const t = useT();
+  const [pending, setPending] = createSignal<EditorKind | null>(null);
+
+  const labelOf = (kind: EditorKind): string => {
+    if (kind === "zed") return t("editorZed");
+    if (kind === "vscode") return t("editorVscode");
+    return t("editorCursor");
+  };
+
+  const handlePick = (editor: EditorInfo) => {
+    if (!editor.found || pending()) return;
+    setPending(editor.kind);
+    openInEditor(editor.kind, props.cwd)
+      .then(() => props.onClose())
+      .catch((e) => {
+        props.onLaunchError(`${t("openInEditorFailed")} ${String(e)}`);
+        setPending(null);
+      });
+  };
+
+  return (
+    <>
+      <div
+        onClick={props.onClose}
+        style={{ position: "fixed", inset: 0, "z-index": 100 }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "calc(100% + 6px)",
+          right: 0,
+          "min-width": "180px",
+          "z-index": 101,
+          background: theme().panelAlt,
+          border: `1px solid ${theme().borderStrong}`,
+          "border-radius": rad(theme(), 10),
+          padding: "6px",
+          "box-shadow": `0 14px 40px rgba(0,0,0,0.6), 0 0 0 0.5px ${theme().borderStrong}`,
+          display: "flex",
+          "flex-direction": "column",
+          gap: "2px",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <For each={props.editors}>
+          {(editor) => {
+            const [hover, setHover] = createSignal(false);
+            const isPending = () => pending() === editor.kind;
+            const disabled = () => !editor.found;
+            return (
+              <div
+                onClick={() => handlePick(editor)}
+                onMouseEnter={() => setHover(true)}
+                onMouseLeave={() => setHover(false)}
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "8px",
+                  padding: "6px 8px",
+                  "border-radius": rad(theme(), 6),
+                  cursor: disabled()
+                    ? "not-allowed"
+                    : pending()
+                      ? "wait"
+                      : "pointer",
+                  background:
+                    hover() && !disabled() ? theme().panel : "transparent",
+                  color: disabled() ? theme().textMuted : theme().text,
+                  "font-size": "12.5px",
+                  "font-family": "var(--mono)",
+                  opacity: disabled() ? 0.55 : 1,
+                }}
+              >
+                <Icon name="editor" size={11} color={theme().textMuted} />
+                <span style={{ flex: 1 }}>{labelOf(editor.kind)}</span>
+                <Show when={disabled()}>
+                  <span
+                    style={{
+                      "font-size": "10.5px",
+                      color: theme().textMuted,
+                    }}
+                  >
+                    {t("fontNotInstalled")}
+                  </span>
+                </Show>
+                <Show when={isPending()}>
+                  <span
+                    style={{
+                      "font-size": "10.5px",
+                      color: theme().textMuted,
+                    }}
+                  >
+                    …
+                  </span>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    </>
+  );
+};
+
 export const ProjectStatusBar: Component<{
   diffOpen: boolean;
   onToggleDiff: () => void;
 }> = (props) => {
   const theme = useTheme();
+  const t = useT();
   const info = useContext(WorkspaceInfoContext);
   const [menuOpen, setMenuOpen] = createSignal(false);
+  const [editorMenuOpen, setEditorMenuOpen] = createSignal(false);
+  const [editors, setEditors] = createSignal<EditorInfo[]>([]);
+  const [editorError, setEditorError] = createSignal<string | null>(null);
+
+  onMount(() => {
+    detectEditors()
+      .then((list) => setEditors(list))
+      .catch(() => setEditors([]));
+  });
+
+  const hasAnyEditor = () => editors().some((e) => e.found);
 
   const branchLabel = (): string | null => {
     const git = info.gitStatus();
@@ -418,6 +591,49 @@ export const ProjectStatusBar: Component<{
         position: "relative",
       }}
     >
+      <Show when={info.cwd() && hasAnyEditor()}>
+        <div style={{ position: "relative", "margin-right": "auto" }}>
+          <EditorChip
+            label={t("openInEditorLabel")}
+            open={editorMenuOpen()}
+            onToggle={() => {
+              setEditorError(null);
+              setEditorMenuOpen((o) => !o);
+            }}
+          />
+          <Show when={editorMenuOpen()}>
+            <EditorMenu
+              cwd={info.cwd()!}
+              editors={editors()}
+              onClose={() => setEditorMenuOpen(false)}
+              onLaunchError={(msg) => setEditorError(msg)}
+            />
+          </Show>
+          <Show when={editorError() && !editorMenuOpen()}>
+            <div
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 6px)",
+                left: 0,
+                "max-width": "320px",
+                padding: "6px 8px",
+                background: theme().panelAlt,
+                border: `1px solid ${theme().red}`,
+                "border-radius": rad(theme(), 6),
+                "font-size": "11px",
+                "font-family": "var(--mono)",
+                color: theme().red,
+                "white-space": "pre-wrap",
+                "word-break": "break-word",
+                "z-index": 99,
+              }}
+              onClick={() => setEditorError(null)}
+            >
+              {editorError()}
+            </div>
+          </Show>
+        </div>
+      </Show>
       <For each={leadingChips()}>{(c) => <StaticChip {...c} />}</For>
       <Show when={branchLabel() && info.cwd()}>
         <div style={{ position: "relative" }}>

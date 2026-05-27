@@ -537,6 +537,7 @@ const ProjectGroup: Component<{
   onActivateTab: (entry: PaletteEntry) => void;
   onCloseTab: (entry: PaletteEntry) => void;
   onAddCommand: () => void;
+  onAddTerminal: () => void;
   onEditCommand: (cmd: ProjectCommandRow) => void;
   onDeleteCommand: (cmd: ProjectCommandRow) => void;
   onViewCommandOutput: (cmd: ProjectCommandRow) => void;
@@ -561,7 +562,31 @@ const ProjectGroup: Component<{
         onDelete={props.onDeleteWs}
       />
       <Show when={props.expanded}>
-        <SectionHeader label={t("sidebarTerminalsSection")} />
+        <SectionHeader
+          label={t("sidebarTerminalsSection")}
+          trailing={
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onAddTerminal();
+              }}
+              title={t("newTerminalButton")}
+              aria-label={t("newTerminalButton")}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: "2px",
+                color: theme().textMuted,
+                cursor: "pointer",
+                display: "flex",
+                "align-items": "center",
+                "border-radius": rad(theme(), 4),
+              }}
+            >
+              <Icon name="plus" size={10} />
+            </button>
+          }
+        />
         <Show
           when={props.tabs.length > 0}
           fallback={
@@ -665,6 +690,7 @@ export const Sidebar: Component<{
   setCommandsForWs: (wsId: string, list: ProjectCommandRow[]) => void;
   expanded: ReadonlySet<string>;
   setExpanded: (next: ReadonlySet<string>) => void;
+  onAddTerminal: (wsId: string) => void;
 }> = (props) => {
   const theme = useTheme();
   const t = useT();
@@ -821,6 +847,7 @@ export const Sidebar: Component<{
                   onActivateTab={props.onActivateTab}
                   onCloseTab={props.onCloseTab}
                   onAddCommand={() => openAddCommand(ws.id)}
+                  onAddTerminal={() => props.onAddTerminal(ws.id)}
                   onEditCommand={(cmd) => openEditCommand(ws.id, cmd)}
                   onDeleteCommand={(cmd) => handleDeleteCommand(ws.id, cmd)}
                   onViewCommandOutput={(cmd) => handleViewOutput(ws, cmd)}

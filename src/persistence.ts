@@ -147,6 +147,20 @@ export const setActiveProject = (id: string | null): Promise<void> =>
 export const detectClis = (): Promise<CliInfo[]> =>
   invoke<CliInfo[]>("detect_clis");
 
+export type EditorKind = "zed" | "vscode" | "cursor";
+
+export interface EditorInfo {
+  kind: EditorKind;
+  found: boolean;
+  path: string | null;
+}
+
+export const detectEditors = (): Promise<EditorInfo[]> =>
+  invoke<EditorInfo[]>("detect_editors");
+
+export const openInEditor = (editor: EditorKind, cwd: string): Promise<void> =>
+  invoke("open_in_editor", { editor, cwd });
+
 export const detectNodeVersion = (cwd: string): Promise<string | null> =>
   invoke<string | null>("detect_node_version", { cwd });
 

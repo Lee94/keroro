@@ -12,6 +12,11 @@ import { rad } from "../themes";
 import { useTheme } from "../ui/useTheme";
 import { Icon } from "../ui/Icon";
 import { gitDiff } from "../persistence";
+import {
+  DIFF_PANEL_WIDTH_MIN,
+  readDiffPanelWidth,
+  writeDiffPanelWidth,
+} from "../settings/storage";
 
 type LineKind = "add" | "del" | "hunk" | "file" | "meta" | "context";
 
@@ -135,6 +140,40 @@ export const DiffView: Component<{
   const [error, setError] = createSignal<string | null>(null);
   const [reloadTick, setReloadTick] = createSignal(0);
   const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
+  const [width, setWidth] = createSignal<number>(readDiffPanelWidth());
+  const [resizing, setResizing] = createSignal(false);
+
+  // Drag the left edge to resize. We compute the new width from the mouse's
+  // distance from the right edge of the viewport — the panel is anchored to
+  // the right, so `innerWidth - clientX` is its natural width. Clamped against
+  // the same min/max the container's CSS used to enforce statically.
+  const onResizeDown = (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    setResizing(true);
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const maxWidth = () => Math.max(DIFF_PANEL_WIDTH_MIN, window.innerWidth * 0.8);
+
+    const onMove = (ev: MouseEvent) => {
+      const next = window.innerWidth - ev.clientX;
+      const clamped = Math.min(maxWidth(), Math.max(DIFF_PANEL_WIDTH_MIN, next));
+      setWidth(clamped);
+    };
+    const onUp = () => {
+      setResizing(false);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      writeDiffPanelWidth(width());
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   const toggleFile = (path: string) => {
     const next = new Set(expanded());
@@ -255,9 +294,9 @@ export const DiffView: Component<{
   };
 
   const containerStyle = (): JSX.CSSProperties => ({
-    width: "520px",
-    "min-width": "320px",
-    "max-width": "60vw",
+    position: "relative",
+    width: `${width()}px`,
+    "min-width": `${DIFF_PANEL_WIDTH_MIN}px`,
     // Hide instead of unmounting so closing the panel preserves the loaded
     // diff state — reopening shows the cached file list immediately.
     display: props.open ? "flex" : "none",
@@ -296,6 +335,25 @@ export const DiffView: Component<{
 
   return (
     <div style={containerStyle()}>
+      {/* Left-edge drag handle. The visible 1px border lives on the panel
+        * itself; this strip is a 6px-wide invisible hit target overlapping the
+        * border so the cursor flips well before the user has to pixel-hunt
+        * the border. While dragging, the strip highlights with the accent
+        * colour so the user gets feedback the gesture took. */}
+      <div
+        onMouseDown={onResizeDown}
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "-3px",
+          width: "6px",
+          cursor: "col-resize",
+          "z-index": 10,
+          background: resizing() ? theme().accent : "transparent",
+          transition: resizing() ? "none" : "background 120ms ease",
+        }}
+      />
       <div style={headerStyle()}>
         <span style={{ "font-weight": 600, color: theme().text }}>Git Diff</span>
         <Show when={totals().count > 0}>
@@ -479,22 +537,34 @@ export const DiffView: Component<{
                       overflow: "auto",
                     }}
                   >
-                    <For each={file.body}>
-                      {(l) => (
-                        <div
-                          style={{
-                            padding: "0 12px",
-                            color: lineColor(l.kind),
-                            background: lineBg(l.kind),
-                            "white-space": "pre",
-                            "font-weight":
-                              l.kind === "file" || l.kind === "hunk" ? 600 : 400,
-                          }}
-                        >
-                          {l.text || " "}
-                        </div>
-                      )}
-                    </For>
+                    {/* Inner track sized to the widest row but at least the
+                      * viewport width, so each row's tinted background extends
+                      * across the full scrollable area instead of cutting off
+                      * at the viewport's right edge when the user scrolls
+                      * horizontally past long lines. */}
+                    <div
+                      style={{
+                        width: "max-content",
+                        "min-width": "100%",
+                      }}
+                    >
+                      <For each={file.body}>
+                        {(l) => (
+                          <div
+                            style={{
+                              padding: "0 12px",
+                              color: lineColor(l.kind),
+                              background: lineBg(l.kind),
+                              "white-space": "pre",
+                              "font-weight":
+                                l.kind === "file" || l.kind === "hunk" ? 600 : 400,
+                            }}
+                          >
+                            {l.text || " "}
+                          </div>
+                        )}
+                      </For>
+                    </div>
                   </div>
                 </Show>
               </div>

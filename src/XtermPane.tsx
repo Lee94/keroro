@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
+import { CanvasAddon } from "@xterm/addon-canvas";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -119,6 +119,13 @@ export const XtermPane: Component<{
    * it instead of repeatedly retrying the dead one.
    */
   onCliSessionRotated?: (newCliSessionId: string) => void;
+  /**
+   * Invoked once when a CLI tab's child has exited and we've put a fresh
+   * shell in its place under the same session id. The parent should patch
+   * the tab to kind "terminal" (so subsequent boots open a shell, not a
+   * dead CLI) and append the localized shell suffix to its title.
+   */
+  onDegradedToShell?: () => void;
 }> = (props) => {
   const themeAccessor = useContext(ThemeContext);
   const activeWorkspaceCwd = useContext(WorkspaceContext);
@@ -235,21 +242,16 @@ export const XtermPane: Component<{
   let opened = false;
   let started = false;
   let disposed = false;
-  let webgl: WebglAddon | null = null;
+  let canvas: CanvasAddon | null = null;
 
-  const tryLoadWebgl = () => {
-    if (disposed || webgl) return;
+  const tryLoadCanvas = () => {
+    if (disposed || canvas) return;
     try {
-      const addon = new WebglAddon();
-      addon.onContextLoss(() => {
-        addon.dispose();
-        webgl = null;
-        queueMicrotask(tryLoadWebgl);
-      });
+      const addon = new CanvasAddon();
       term.loadAddon(addon);
-      webgl = addon;
+      canvas = addon;
     } catch {
-      webgl = null;
+      canvas = null;
     }
   };
 
@@ -314,12 +316,22 @@ export const XtermPane: Component<{
   // conservative — anything we can't reliably track (history nav, cursor
   // editing, paste sequences, control bytes) resets the buffer so we
   // never persist a misaligned line.
-  const isShell = props.command === undefined;
+  //
+  // `degradedToShell` flips on the first time a CLI tab's child exits and
+  // we drop a fresh shell into the same session id — see the exit handler
+  // below. It locks out the resume/rotation paths (they only made sense
+  // for the original CLI invocation) and short-circuits a second
+  // degradation if the user later exits the replacement shell too.
+  const isShellTab = props.command === undefined;
+  let degradedToShell = false;
   let inputBuf = "";
   const INPUT_BUF_MAX = 512;
 
   const captureKeystroke = (data: string) => {
-    if (!isShell || disposed) return;
+    // Only the genuine shell tabs round-trip last_command into the DB; a
+    // degraded shell shares its session id with the previous CLI tab and
+    // we don't want to clobber whatever the user typed there.
+    if (!isShellTab || disposed) return;
     if (data === "\r" || data === "\n" || data === "\r\n") {
       const cmd = inputBuf.trim();
       inputBuf = "";
@@ -368,7 +380,7 @@ export const XtermPane: Component<{
   // Cancelled the moment the user types their own keystroke — we don't want
   // to clobber what they're typing.
   const REPLAY_IDLE_MS = 500;
-  let replayPending = isShell && !!props.lastCommand;
+  let replayPending = isShellTab && !!props.lastCommand;
   let replayIdleHandle: ReturnType<typeof setTimeout> | null = null;
 
   const cancelReplay = () => {
@@ -509,12 +521,12 @@ export const XtermPane: Component<{
     });
   };
 
-  // First-paint of a workspace's terminals: xterm canvas + WebGL context +
+  // First-paint of a workspace's terminals: xterm canvas + canvas renderer +
   // PTY spawn + Tauri event listeners. Deferred until the tab is actually
-  // visible so loading N workspaces doesn't fork N shells and create N GPU
-  // contexts during boot / project switch. Runs once per session — once a
-  // PTY is alive we keep it alive across visibility toggles so scrollback
-  // and running processes survive.
+  // visible so loading N workspaces doesn't fork N shells during boot /
+  // project switch. Runs once per session — once a PTY is alive we keep it
+  // alive across visibility toggles so scrollback and running processes
+  // survive.
   const startOnce = async () => {
     if (started || disposed) return;
     started = true;
@@ -537,7 +549,11 @@ export const XtermPane: Component<{
       if (rotating) return;
       const livedFor = Date.now() - lastSpawnAt;
       const sawInUse = tailLooksLikeSessionInUse();
+      // Resume/rotation only applies to the original CLI invocation. Once
+      // we've degraded to a shell, the child that just exited *is* the
+      // shell — there's nothing to resume.
       const canRetry =
+        !degradedToShell &&
         !!props.command &&
         !!props.cliSessionId &&
         !disposed &&
@@ -551,6 +567,27 @@ export const XtermPane: Component<{
         return;
       }
       term.write(`\r\n\x1b[2m${t("processExited")}\x1b[0m\r\n`);
+      // CLI-tab fallthrough: drop a fresh shell into the same session id
+      // so the pane stays interactive instead of becoming a dead box.
+      // Only fires once per tab — if the user later exits the replacement
+      // shell, we leave the [process exited] message and let it sit.
+      if (!disposed && !degradedToShell && !isShellTab) {
+        degradedToShell = true;
+        invoke("pty_respawn_as_shell", {
+          id: props.sessionId,
+          cols: term.cols || 80,
+          rows: term.rows || 24,
+          cwd: tabCwd(),
+        })
+          .then(() => {
+            if (disposed) return;
+            props.onDegradedToShell?.();
+          })
+          .catch((err) => {
+            if (disposed) return;
+            term.write(`\r\n\x1b[31m${t("spawnFailed")}: ${err}\x1b[0m\r\n`);
+          });
+      }
     });
     if (disposed) {
       unlistenData?.();
@@ -576,8 +613,7 @@ export const XtermPane: Component<{
       h.appendChild(container);
     }
     // Defer the synchronous boot cost (xterm.open lays out the canvas, the
-    // WebGL addon creates a GPU context — on a cold Windows WebView2 the
-    // first WebGL context alone can stall the renderer ~100–300ms) until the
+    // canvas addon allocates its 2D contexts and texture atlases) until the
     // next animation frame. This lets the surrounding chrome paint first
     // instead of the whole window appearing to freeze until the terminal
     // finishes initializing.
@@ -586,11 +622,11 @@ export const XtermPane: Component<{
       requestAnimationFrame(() => {
         if (disposed) return;
         term.open(container);
-        // WebGL renderer renders truecolor faithfully (the DOM
+        // Canvas renderer renders truecolor faithfully (the DOM
         // fallback would force every low-contrast pixel to meet AA,
         // which mangles gradient ASCII art). Falls back gracefully
-        // to DOM if the GPU context can't be created.
-        tryLoadWebgl();
+        // to DOM if the 2D context can't be created.
+        tryLoadCanvas();
         opened = true;
         resizeObserver = new ResizeObserver(() => doFit());
         resizeObserver.observe(container);
@@ -679,8 +715,8 @@ export const XtermPane: Component<{
     unlistenData?.();
     unlistenExit?.();
     invoke("pty_kill", { id: props.sessionId }).catch(() => {});
-    webgl?.dispose();
-    webgl = null;
+    canvas?.dispose();
+    canvas = null;
     term.dispose();
     if (container.parentElement) {
       container.parentElement.removeChild(container);

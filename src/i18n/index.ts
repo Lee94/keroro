@@ -67,6 +67,7 @@ interface Dict {
   spawnFailed: string;
   resumeFailedRetrying: string;
   sessionUnlockedResuming: string;
+  degradedToShellSuffix: string;
   // Terminal search
   searchPlaceholder: string;
   searchPrev: string;
@@ -123,6 +124,14 @@ interface Dict {
   tasksExited: string;
   tasksKill: string;
   tasksKillTooltip: string;
+  // External editors (project status bar)
+  openInEditorLabel: string;
+  openInEditorTooltip: string;
+  openInEditorEmpty: string;
+  editorZed: string;
+  editorVscode: string;
+  editorCursor: string;
+  openInEditorFailed: string;
 }
 
 const en: Dict = {
@@ -178,6 +187,7 @@ const en: Dict = {
   spawnFailed: "failed to spawn pty",
   resumeFailedRetrying: "[resume failed — starting a fresh session]",
   sessionUnlockedResuming: "[unlocked stale session — resuming with history]",
+  degradedToShellSuffix: " — shell",
   searchPlaceholder: "Search terminal",
   searchPrev: "Previous match (Shift+Enter)",
   searchNext: "Next match (Enter)",
@@ -229,6 +239,13 @@ const en: Dict = {
   tasksExited: "exited",
   tasksKill: "Kill",
   tasksKillTooltip: "Force-kill this session and its child processes",
+  openInEditorLabel: "Open in editor",
+  openInEditorTooltip: "Open this project in an external editor",
+  openInEditorEmpty: "No editor CLI found on PATH (zed / code / cursor)",
+  editorZed: "Zed",
+  editorVscode: "VS Code",
+  editorCursor: "Cursor",
+  openInEditorFailed: "Failed to launch editor:",
 };
 
 const zh: Dict = {
@@ -284,6 +301,7 @@ const zh: Dict = {
   spawnFailed: "终端启动失败",
   resumeFailedRetrying: "[恢复会话失败，正在创建新会话]",
   sessionUnlockedResuming: "[已解锁僵尸会话，正在恢复原对话]",
+  degradedToShellSuffix: " — shell",
   searchPlaceholder: "搜索终端",
   searchPrev: "上一处 (Shift+Enter)",
   searchNext: "下一处 (Enter)",
@@ -335,6 +353,13 @@ const zh: Dict = {
   tasksExited: "已退出",
   tasksKill: "终止",
   tasksKillTooltip: "强制终止该会话及其所有子进程",
+  openInEditorLabel: "在编辑器中打开",
+  openInEditorTooltip: "用外部编辑器打开当前项目",
+  openInEditorEmpty: "未在 PATH 中找到编辑器 CLI（zed / code / cursor）",
+  editorZed: "Zed",
+  editorVscode: "VS Code",
+  editorCursor: "Cursor",
+  openInEditorFailed: "启动编辑器失败：",
 };
 
 export type DictKey = keyof Dict;

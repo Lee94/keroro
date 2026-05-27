@@ -19,7 +19,7 @@ keroro 是一个面向 CLI coding agent 的桌面工作台。
 - **CLI agent 集成**：自动探测已安装的 `claude` 和 `codex`，只在可用时显示对应入口。
 - **Claude 会话恢复**：Claude Code 标签会尽量按已有 session id 恢复；恢复失败时自动创建新会话并继续。
 - **本地持久化**：项目列表、标签页、分屏布局、当前项目等写入本机 SQLite。
-- **终端体验**：xterm.js + WebGL 渲染、链接识别、终端搜索、字体大小快捷键、字体选择。
+- **终端体验**：xterm.js + Canvas 渲染、链接识别、终端搜索、字体大小快捷键、字体选择。
 - **项目状态提示**：显示当前项目的 Node 版本、Git 分支、ahead/behind、dirty 状态和行变更统计。
 - **等待输入提示**：当 agent/终端看起来在等待确认或回答时，标签和项目侧栏会出现提示点。
 - **主题与偏好**：内置 Ember / Forest / Plum / Zed Light 主题，支持 cozy/compact 密度和中英文界面。

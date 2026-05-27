@@ -14,6 +14,10 @@ const THEME_NAME_KEY = "faye:themeName";
 const TERM_FONT_SIZE_KEY = "faye:termFontSize";
 const TERM_FONT_FAMILY_KEY = "faye:termFontFamily";
 const LOCALE_KEY = "faye:locale";
+const DIFF_PANEL_WIDTH_KEY = "faye:diffPanelWidth";
+
+export const DIFF_PANEL_WIDTH_MIN = 320;
+export const DIFF_PANEL_WIDTH_DEFAULT = 520;
 
 // Swallow QuotaExceeded / private-mode / disabled-storage failures: nothing
 // here is load-bearing enough to crash the app for, the next boot just falls
@@ -108,6 +112,20 @@ export const readSidebarExpanded = (): Set<string> => {
 
 export const writeSidebarExpanded = (ids: ReadonlySet<string>): void =>
   safeWrite(SIDEBAR_EXPANDED_KEY, JSON.stringify([...ids]));
+
+export const readDiffPanelWidth = (): number => {
+  try {
+    const v = localStorage.getItem(DIFF_PANEL_WIDTH_KEY);
+    if (v !== null) {
+      const n = parseInt(v, 10);
+      if (Number.isFinite(n) && n >= DIFF_PANEL_WIDTH_MIN) return n;
+    }
+  } catch {}
+  return DIFF_PANEL_WIDTH_DEFAULT;
+};
+
+export const writeDiffPanelWidth = (n: number): void =>
+  safeWrite(DIFF_PANEL_WIDTH_KEY, String(Math.round(n)));
 
 export const readThemeName = (): ThemeName => {
   try {

@@ -62,6 +62,7 @@ import {
 } from "./panes/tree";
 import {
   isPtyKind,
+  newId,
   type DropSide,
   type LeafPane,
   type PaneNode,
@@ -69,6 +70,7 @@ import {
   type SplitPane,
   type Tab,
 } from "./panes/types";
+import { defaultTabTitle } from "./sessionTitles";
 import { TweaksPanel } from "./settings/TweaksPanel";
 import { CommandPalette, type PaletteEntry } from "./CommandPalette";
 import {
@@ -743,6 +745,38 @@ const App: Component = () => {
     setRootForWs(wsId, closeTabInTree(wp.root, leafId, tabId));
   };
 
+  // Sidebar "+ terminal" entry: append a shell tab to the workspace's first
+  // leaf and switch to it. For split projects the first leaf is the top-left
+  // pane; the user can drag the new tab elsewhere if that's not where they
+  // wanted it.
+  const handleAddTerminalForWs = (wsId: string) => {
+    const wp = panes()[wsId];
+    if (!wp) return;
+    let targetLeafId: string | null = null;
+    walkLeaves(wp.root, (leaf) => {
+      if (targetLeafId === null) targetLeafId = leaf.id;
+    });
+    if (!targetLeafId) return;
+    const tabId = newId("tab");
+    const newTab: Tab = {
+      id: tabId,
+      kind: "terminal",
+      title: defaultTabTitle("terminal"),
+      cliSessionId: undefined,
+    };
+    setLeafForWs(wsId, targetLeafId, (leaf) => ({
+      ...leaf,
+      tabs: [...leaf.tabs, newTab],
+      activeTab: tabId,
+    }));
+    if (activeWs() !== wsId) setActiveWs(wsId);
+    if (!expandedProjects().has(wsId)) {
+      const next = new Set(expandedProjects());
+      next.add(wsId);
+      setExpandedProjects(next);
+    }
+  };
+
   // Called when XtermPane auto-rotates a tab's cliSessionId after a failed
   // claude --resume. Walks every workspace's pane tree, patches the matching
   // tab in place, and re-publishes the panes signal — the existing debounced
@@ -760,6 +794,43 @@ const App: Component = () => {
             newTabs[idx] = {
               ...newTabs[idx],
               cliSessionId: newCliSessionId,
+            };
+            return { ...leaf, tabs: newTabs };
+          }),
+        };
+      }
+      return next;
+    });
+  };
+
+  // Called when XtermPane has put a shell into a CLI tab's session id
+  // after its child exited. We re-kind the tab to "terminal" (so a future
+  // boot opens a shell instead of trying to spawn the dead CLI again) and
+  // append a one-time " — shell" suffix to the title so the tab bar
+  // signals "this used to be claude/codex, now it's a shell".
+  //
+  // ptyTabRefs caches the original Tab ref per id, so this update doesn't
+  // re-key the <For> over allPtyTabs() — the running PTY survives.
+  const degradeTabToShell = (tabId: string) => {
+    const suffix = translate(locale(), "degradedToShellSuffix");
+    setPanes((prev) => {
+      const next: PanesByWs = {};
+      for (const [wsId, wp] of Object.entries(prev)) {
+        next[wsId] = {
+          root: mapLeaves(wp.root, (leaf) => {
+            const idx = leaf.tabs.findIndex((t) => t.id === tabId);
+            if (idx === -1) return leaf;
+            const target = leaf.tabs[idx];
+            if (target.kind === "terminal") return leaf;
+            const newTabs = [...leaf.tabs];
+            const nextTitle = target.title.endsWith(suffix)
+              ? target.title
+              : `${target.title}${suffix}`;
+            newTabs[idx] = {
+              ...target,
+              kind: "terminal",
+              title: nextTitle,
+              cliSessionId: undefined,
             };
             return { ...leaf, tabs: newTabs };
           }),
@@ -876,6 +947,7 @@ const App: Component = () => {
               setCommandsForWs={setCommandsForWs}
               expanded={expandedProjects()}
               setExpanded={setExpandedProjects}
+              onAddTerminal={handleAddTerminalForWs}
             />
 
             <Show
@@ -888,7 +960,7 @@ const App: Component = () => {
                 * with display:none/flex so switching projects doesn't unmount
                 * leaves / re-parent xterm containers / refit. Costs a few
                 * extra DOM nodes but eliminates the per-switch reflow burst
-                * (especially heavy on Windows WebView2 + WebGL).
+                * (especially heavy on Windows WebView2).
                 *
                 * Outer column wraps the pane stack + a single project-level
                 * status bar at the bottom (chips read the active workspace via
@@ -971,6 +1043,7 @@ const App: Component = () => {
                       onCliSessionRotated={(newId) =>
                         rotateTabCliSession(t.id, newId)
                       }
+                      onDegradedToShell={() => degradeTabToShell(t.id)}
                     />
                   )}
                   </For>

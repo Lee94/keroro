@@ -25,6 +25,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             pty::pty_spawn,
+            pty::pty_respawn_as_shell,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,
@@ -35,6 +36,8 @@ pub fn run() {
             sys_info::checkout_git_branch,
             sys_info::git_diff,
             sys_info::detect_clis,
+            sys_info::detect_editors,
+            sys_info::open_in_editor,
             claude::claude_spawn_args,
             claude::claude_session_title,
             claude::claude_unlock_session,

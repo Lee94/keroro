@@ -13,7 +13,8 @@ export type IconName =
   | "split-h"
   | "split-v"
   | "settings"
-  | "activity";
+  | "activity"
+  | "editor";
 
 export const Icon: Component<{
   name: IconName;
@@ -103,6 +104,13 @@ export const Icon: Component<{
       <Match when={props.name === "activity"}>
         <svg style={s()} viewBox="0 0 14 14" fill="none" stroke={color()} stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 7h2.5l1.5-4 3 8 1.5-4H13" />
+        </svg>
+      </Match>
+      <Match when={props.name === "editor"}>
+        <svg style={s()} viewBox="0 0 14 14" fill="none" stroke={color()} stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.5 2.5H2.5v9h9v-4" />
+          <path d="M8.5 2.5h3v3" />
+          <path d="M11.5 2.5L6.5 7.5" />
         </svg>
       </Match>
     </Switch>

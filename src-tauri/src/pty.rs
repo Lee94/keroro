@@ -169,36 +169,23 @@ pub(crate) fn pick_program() -> String {
     "/bin/sh".to_string()
 }
 
-#[tauri::command]
-pub fn pty_spawn(
-    app: AppHandle,
-    state: State<'_, PtyManager>,
-    id: String,
+// Internal spawn used by both `pty_spawn` (initial boot of a tab) and
+// `pty_respawn_as_shell` (CLI tab whose child exited — we put a shell back
+// in the same session id so the pane stays interactive). Holds the lock
+// only across map insert; the reader thread is detached.
+fn spawn_into(
+    app: &AppHandle,
+    state: &PtyManager,
+    id: &str,
     cols: u16,
     rows: u16,
-    cwd: Option<String>,
-    command: Option<String>,
-    args: Option<Vec<String>>,
+    cmd: CommandBuilder,
 ) -> Result<(), String> {
-    {
-        let map = state.inner.lock().map_err(|e| e.to_string())?;
-        if map.contains_key(&id) {
-            return Ok(());
-        }
-    }
-
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
         .map_err(|e| e.to_string())?;
 
-    let cmd = match command.as_deref() {
-        Some(c) if !c.is_empty() => {
-            let args = args.unwrap_or_default();
-            run_command(c, &args, cwd.as_deref())
-        }
-        _ => pick_shell(cwd.as_deref()),
-    };
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
 
@@ -208,7 +195,7 @@ pub fn pty_spawn(
 
     {
         let mut map = state.inner.lock().map_err(|e| e.to_string())?;
-        map.insert(id.clone(), PtySession { writer, master: pair.master, child, root_pid });
+        map.insert(id.to_string(), PtySession { writer, master: pair.master, child, root_pid });
     }
 
     let data_event = format!("pty://data/{}", id);
@@ -231,6 +218,62 @@ pub fn pty_spawn(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn pty_spawn(
+    app: AppHandle,
+    state: State<'_, PtyManager>,
+    id: String,
+    cols: u16,
+    rows: u16,
+    cwd: Option<String>,
+    command: Option<String>,
+    args: Option<Vec<String>>,
+) -> Result<(), String> {
+    {
+        let map = state.inner.lock().map_err(|e| e.to_string())?;
+        if map.contains_key(&id) {
+            return Ok(());
+        }
+    }
+
+    let cmd = match command.as_deref() {
+        Some(c) if !c.is_empty() => {
+            let args = args.unwrap_or_default();
+            run_command(c, &args, cwd.as_deref())
+        }
+        _ => pick_shell(cwd.as_deref()),
+    };
+    spawn_into(&app, &state, &id, cols, rows, cmd)
+}
+
+// Drop the (now-dead) child running under `id` and spawn a fresh login
+// shell in its place. Used by the frontend after a CLI tab's child exits,
+// so the pane "degrades" to a usable terminal instead of being a dead box
+// with `[process exited]` and no input.
+#[tauri::command]
+pub fn pty_respawn_as_shell(
+    app: AppHandle,
+    state: State<'_, PtyManager>,
+    id: String,
+    cols: u16,
+    rows: u16,
+    cwd: Option<String>,
+) -> Result<(), String> {
+    {
+        let mut map = state.inner.lock().map_err(|e| e.to_string())?;
+        if let Some(mut session) = map.remove(&id) {
+            // The child is almost always already dead by the time we get
+            // here (this is called from the frontend exit handler), but
+            // kill+wait is cheap and avoids leaking handles in the rare
+            // case where the exit event raced ahead of the reaper.
+            let _ = session.child.kill();
+            let _ = session.child.wait();
+        }
+    }
+    let cmd = pick_shell(cwd.as_deref());
+    spawn_into(&app, &state, &id, cols, rows, cmd)
 }
 
 #[tauri::command]

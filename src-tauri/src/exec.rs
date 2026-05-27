@@ -327,7 +327,29 @@ fn kill_handle_blocking(handle: &RunHandle) {
         // detached from the group.
         let _ = child.kill();
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        // The spawned child here is the wrapper shell (powershell.exe /
+        // cmd.exe). The user's actual command runs as a grandchild that
+        // inherited our stdout/stderr pipe handles. `child.kill()` alone only
+        // terminates the wrapper — reparented grandchildren keep the pipes
+        // open, the reader threads never see EOF, and the supervisor never
+        // flips state out of Running (so the Stop button looks dead). Use
+        // `taskkill /F /T` to take down the whole tree so the pipes close and
+        // the supervisor can reap.
+        let pid = child.id();
+        let _ = Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        // Fallback in case taskkill is unavailable or the tree took itself
+        // down already — harmless if the child is already gone.
+        let _ = child.kill();
+    }
+    #[cfg(all(not(unix), not(windows)))]
     {
         let _ = child.kill();
     }

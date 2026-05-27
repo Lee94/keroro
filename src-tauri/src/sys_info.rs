@@ -21,6 +21,21 @@ pub struct CliInfo {
 }
 
 #[derive(Serialize)]
+pub struct EditorInfo {
+    pub kind: String,
+    pub found: bool,
+    pub path: Option<String>,
+}
+
+// Order here is also the order shown in the status-bar menu. Each entry maps
+// the editor's internal id to the CLI shim name that ships with it on PATH.
+const EDITOR_BINARIES: &[(&str, &str)] = &[
+    ("zed", "zed"),
+    ("vscode", "code"),
+    ("cursor", "cursor"),
+];
+
+#[derive(Serialize)]
 pub struct GitStatus {
     pub branch: Option<String>,
     pub ahead: u32,
@@ -106,6 +121,58 @@ async fn run_git_capture(cwd: &str, args: &[&str]) -> Result<String, String> {
 }
 
 // ─── CLI / Node detection ────────────────────────────────────────────
+
+#[tauri::command]
+pub fn detect_editors() -> Vec<EditorInfo> {
+    EDITOR_BINARIES
+        .iter()
+        .map(|(kind, bin)| {
+            let path = find_cli(bin);
+            EditorInfo {
+                kind: (*kind).to_string(),
+                found: path.is_some(),
+                path: path.map(|p| p.to_string_lossy().into_owned()),
+            }
+        })
+        .collect()
+}
+
+// Launch a detected external editor against `cwd`. Detached spawn — we don't
+// hold onto the Child, so the editor lives past Faye exiting. On Windows the
+// CLI shim is usually a `.cmd` (resolved by `find_cli`); rustc 1.78+ routes
+// `.cmd`/`.bat` through cmd.exe internally, so a direct spawn is safe.
+#[tauri::command]
+pub fn open_in_editor(editor: String, cwd: String) -> Result<(), String> {
+    let bin = EDITOR_BINARIES
+        .iter()
+        .find(|(kind, _)| *kind == editor)
+        .map(|(_, b)| *b)
+        .ok_or_else(|| format!("未知编辑器：{}", editor))?;
+    let program =
+        find_cli(bin).ok_or_else(|| format!("{} 未安装或未在 PATH 中找到 `{}`", editor, bin))?;
+
+    let mut cmd = std::process::Command::new(&program);
+    cmd.arg(&cwd);
+    cmd.current_dir(&cwd);
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // Detach from our process group so the editor survives if Faye exits,
+        // and so we don't leave zombies for an interactive long-lived child.
+        cmd.process_group(0);
+    }
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| format!("启动 {} 失败：{}", editor, e))
+}
 
 #[tauri::command]
 pub fn detect_clis() -> Vec<CliInfo> {
